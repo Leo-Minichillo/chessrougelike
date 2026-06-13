@@ -66,39 +66,38 @@ export function BattleScreen() {
       <div className="sidebar">
         <div className="panel" style={{ padding: 14 }}>
           <strong>Spells</strong>
-          <div className="relic-bar" style={{ marginTop: 8 }}>
-            {battle.relics.filter((r) => r.def.kind === 'active').map((r) => (
+          <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>
+            Charges don't refresh between battles — spend wisely.
+          </div>
+          <div className="relic-bar">
+            {battle.spells.map((s) => (
               <button
-                key={r.def.id}
-                className={`spell-btn ${!r.usable ? 'disabled' : ''} ${
-                  targeting?.relicId === r.def.id ? 'armed' : ''
+                key={s.def.id}
+                className={`spell-btn ${!s.usable ? 'disabled' : ''} ${
+                  targeting?.relicId === s.def.id ? 'armed' : ''
                 }`}
-                disabled={!r.usable}
-                title={r.def.description}
-                onClick={() => activateRelic(r.def.id)}
+                disabled={!s.usable}
+                title={s.def.description}
+                onClick={() => activateRelic(s.def.id)}
               >
-                <span className="ico">{r.def.icon}</span>
-                <span className="nm">{r.def.name}</span>
-                <span className="ch">×{r.charges}</span>
+                <span className="ico">{s.def.icon}</span>
+                <span className="nm">{s.def.name}</span>
+                <span className="ch">×{s.charges}</span>
               </button>
             ))}
-            {battle.relics.filter((r) => r.def.kind === 'active').length === 0 && (
-              <span className="muted">No spells yet.</span>
-            )}
+            {battle.spells.length === 0 && <span className="muted">No spells.</span>}
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <strong>Passives</strong>
+            <strong>Relics</strong>
             <div style={{ marginTop: 6 }}>
-              {battle.relics.filter((r) => r.def.kind !== 'active').map((r) => (
-                <span key={r.def.id} className="relic-chip" title={r.def.description}>
-                  <span className="ico">{r.def.icon}</span>
-                  {r.def.name}
+              {battle.relics.map((def) => (
+                <span key={def.id} className="relic-chip" title={def.description}>
+                  <span className="ico">{def.icon}</span>
+                  {def.name}
                 </span>
               ))}
-              {battle.relics.filter((r) => r.def.kind !== 'active').length === 0 && (
-                <span className="muted">None</span>
-              )}
+              {battle.relics.length === 0 && <span className="muted">None</span>}
             </div>
           </div>
         </div>

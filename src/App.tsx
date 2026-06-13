@@ -17,7 +17,7 @@ export function App() {
           ♞ GAMBIT <span className="logo-sub">a chess roguelike</span>
         </h1>
       </header>
-      <main className="app-main">
+      <main className="app-main" key={phase}>
         {phase === 'eloEntry' && <EloEntryScreen />}
         {phase === 'map' && <MapScreen />}
         {phase === 'battle' && <BattleScreen />}

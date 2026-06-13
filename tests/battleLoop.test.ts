@@ -31,7 +31,9 @@ describe('full battle loop', () => {
   it('plays a skirmish to a terminal phase without corrupting the board', () => {
     const setup = buildEncounter(node('battle'), 'loop-seed');
     const cfg = eloToEngineConfig(900);
-    const e = new BattleEngine(setup.fen, setup.objective, [getRelic('time-stutter')]);
+    const e = new BattleEngine(setup.fen, setup.objective, [], [
+      { def: getRelic('time-stutter'), charges: 3 },
+    ]);
 
     let guard = 0;
     while (e.phase !== 'won' && e.phase !== 'lost' && guard++ < 120) {
@@ -54,7 +56,9 @@ describe('full battle loop', () => {
   it('survives an AI turn while a piece is frozen', () => {
     const setup = buildEncounter(node('elite'), 'frozen-seed');
     const cfg = eloToEngineConfig(1200);
-    const e = new BattleEngine(setup.fen, setup.objective, [getRelic('frostbite')]);
+    const e = new BattleEngine(setup.fen, setup.objective, [], [
+      { def: getRelic('frostbite'), charges: 2 },
+    ]);
     // freeze an enemy piece, then run one AI turn
     e.applyPlayerMove(playerPickMove(e)!);
     if (e.phase === 'playerInput') e.activateRelic('frostbite', e.enemyPieces()[0].square);

@@ -2,6 +2,7 @@ import { useGameStore } from '../../state/useGameStore';
 import { availableNodes } from '../../map/mapGen';
 import { NODE_ICON, NODE_LABEL, type MapNode } from '../../map/mapTypes';
 import { getRelic } from '../../relics/relicDefs';
+import { MAX_ACTS } from '../../run/runState';
 
 export function MapScreen() {
   const run = useGameStore((s) => s.run);
@@ -17,7 +18,7 @@ export function MapScreen() {
       <div className="panel map-board">
         {toast && <div className="toast">{toast}</div>}
         <h3 className="center" style={{ marginTop: 0 }}>
-          Act {run.act} — choose your path
+          Act {run.act} of {MAX_ACTS} — choose your path
         </h3>
         <div className="map-rows">
           {[...run.map.rows].reverse().map((row, ri) => (
@@ -55,7 +56,21 @@ export function MapScreen() {
         </div>
 
         <div className="panel" style={{ padding: 16 }}>
-          <strong>Relics</strong>
+          <strong>Spells</strong>
+          <div style={{ marginTop: 8 }}>
+            {run.spells.map((s, i) => {
+              const def = getRelic(s.defId);
+              return (
+                <span key={i} className="relic-chip" title={def.description}>
+                  <span className="ico">{def.icon}</span>
+                  {def.name}
+                  <span className="muted"> ×{s.charges}</span>
+                </span>
+              );
+            })}
+            {run.spells.length === 0 && <span className="muted">None</span>}
+          </div>
+          <strong style={{ display: 'block', marginTop: 12 }}>Relics</strong>
           <div style={{ marginTop: 8 }}>
             {run.relics.map((r, i) => {
               const def = getRelic(r.defId);
@@ -63,10 +78,10 @@ export function MapScreen() {
                 <span key={i} className="relic-chip" title={def.description}>
                   <span className="ico">{def.icon}</span>
                   {def.name}
-                  {def.kind === 'active' && <span className="muted"> ×{r.maxCharges}</span>}
                 </span>
               );
             })}
+            {run.relics.length === 0 && <span className="muted">None</span>}
           </div>
         </div>
 

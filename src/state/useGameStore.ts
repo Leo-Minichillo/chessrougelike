@@ -12,15 +12,19 @@ import { generateMap, findNode } from '../map/mapGen';
 import type { MapNode } from '../map/mapTypes';
 import {
   createRunState,
+  grantSpell,
+  MAX_ACTS,
   type RunState,
 } from '../run/runState';
 import { buildEncounter } from '../run/encounters';
 import {
   nodeGoldReward,
-  rollRelicReward,
+  rollReward,
   rollShop,
-  toOwned,
   HEAL_COST,
+  RECHARGE_COST,
+  type ShopItem,
+  type RewardOption,
 } from '../run/rewards';
 import { rollEvent, type GameEvent } from '../run/events';
 
@@ -44,7 +48,8 @@ export interface BattleView {
   lastMove: { from: Square; to: Square } | null;
   checkedKing: Square | null;
   logs: string[];
-  relics: { def: RelicDef; charges: number; usable: boolean }[];
+  relics: RelicDef[]; // passive, always-on
+  spells: { def: RelicDef; charges: number; usable: boolean }[];
   title: string;
   flavor: string;
   config: EngineConfig;
@@ -58,7 +63,7 @@ export interface TargetingState {
 }
 
 interface ShopState {
-  stock: { def: RelicDef; cost: number }[];
+  stock: ShopItem[];
 }
 
 interface GameStore {
@@ -73,11 +78,12 @@ interface GameStore {
   pendingPromotion: { from: Square; to: Square } | null;
 
   // transient node screens
-  rewardOptions: RelicDef[];
+  rewardOptions: RewardOption[];
   shop: ShopState | null;
   event: GameEvent | null;
   eventResult: string | null;
   toast: string | null;
+  actCleared: number | null; // act number just cleared (interstitial)
 
   // actions
   startRun: (baseElo: number, seed?: string) => void;
@@ -86,12 +92,14 @@ interface GameStore {
   choosePromotion: (piece: 'q' | 'r' | 'b' | 'n') => void;
   activateRelic: (relicId: string) => void;
   cancelTargeting: () => void;
-  claimReward: (def: RelicDef | null) => void;
-  buyRelic: (def: RelicDef) => void;
+  claimReward: (option: RewardOption | null) => void;
+  buyItem: (item: ShopItem) => void;
   buyHeal: () => void;
+  buyRecharge: () => void;
   leaveShop: () => void;
   resolveEvent: (choiceIdx: number) => void;
   leaveEvent: () => void;
+  nextAct: () => void;
   abandonRun: () => void;
   loadSaved: () => boolean;
 }
@@ -112,8 +120,11 @@ function saveRun(run: RunState | null) {
   }
 }
 
-function ownedRelicDefs(run: RunState): RelicDef[] {
+function ownedPassives(run: RunState): RelicDef[] {
   return run.relics.map((r) => getRelic(r.defId));
+}
+function ownedSpells(run: RunState): { def: RelicDef; charges: number }[] {
+  return run.spells.map((s) => ({ def: getRelic(s.defId), charges: s.charges }));
 }
 
 // Build the UI projection from the live engine.
@@ -128,10 +139,11 @@ function projectBattle(node: MapNode, title: string, flavor: string): BattleView
     lastMove: e.lastMove,
     checkedKing: e.checkedKingSquare(),
     logs: e.logs.slice(-6),
-    relics: e.relics.map((r) => ({
-      def: r.def,
-      charges: r.charges,
-      usable: r.def.kind === 'active' && r.charges > 0 && e.phase === 'playerInput',
+    relics: e.passives,
+    spells: e.spells.map((s) => ({
+      def: s.def,
+      charges: s.charges,
+      usable: s.charges > 0 && e.phase === 'playerInput',
     })),
     title,
     flavor,
@@ -172,24 +184,46 @@ export const useGameStore = create<GameStore>((set, get) => {
     else if (e.phase === 'aiThinking') void runAiTurn();
   }
 
+  // Write the battle's remaining spell charges back to the run, and apply the
+  // Reliquary relic (refill 1 charge per spell on a win).
+  function persistSpells(run: RunState, won: boolean) {
+    const remaining = engineRef!.spellCharges();
+    for (const s of run.spells) {
+      const found = remaining.find((r) => r.defId === s.defId);
+      if (found) s.charges = found.charges;
+    }
+    if (won && run.relics.some((r) => r.defId === 'reliquary')) {
+      for (const s of run.spells) {
+        const max = getRelic(s.defId).charges ?? 1;
+        s.charges = Math.min(s.charges + 1, max);
+      }
+    }
+  }
+
   function finishBattle(won: boolean) {
     const run = get().run;
     const e = engineRef;
     if (!run || !e || !currentNode) return;
+    persistSpells(run, won);
     if (won) {
       run.gold += e.goldEarned + nodeGoldReward(currentNode.type);
       const node = findNode(run.map, currentNode.id);
       if (node) node.visited = true;
       run.currentNodeId = currentNode.id;
       if (currentNode.type === 'boss') {
-        run.defeatedBoss = true;
-        saveRun(null);
-        set({ phase: 'victory', battle: null });
+        if (run.act >= MAX_ACTS) {
+          run.defeatedBoss = true;
+          saveRun(null);
+          set({ phase: 'victory', battle: null });
+        } else {
+          // Cleared the act — show an interstitial, then advance.
+          saveRun(run);
+          set({ phase: 'reward', actCleared: run.act, battle: null, rewardOptions: rollReward(run, currentNode.id) });
+        }
         return;
       }
       saveRun(run);
-      // Reward: pick 1 of 3 relics (battles/elites), else straight to map.
-      const options = rollRelicReward(run, currentNode.id);
+      const options = rollReward(run, currentNode.id);
       if (options.length > 0) {
         set({ phase: 'reward', rewardOptions: options, battle: null });
       } else {
@@ -217,12 +251,20 @@ export const useGameStore = create<GameStore>((set, get) => {
 
   function enterBattle(node: MapNode) {
     const run = get().run!;
-    const setup = buildEncounter(node, run.seed);
+    const used = new Set(run.usedPuzzles);
+    const setup = buildEncounter(node, run.seed, used, run.act);
+    if (!run.usedPuzzles.includes(setup.fen)) run.usedPuzzles.push(setup.fen);
     const effElo = computeEncounterElo(run, node);
     engineConfig = eloToEngineConfig(effElo);
-    engineRef = new BattleEngine(setup.fen, setup.objective, ownedRelicDefs(run));
+    engineRef = new BattleEngine(
+      setup.fen,
+      setup.objective,
+      ownedPassives(run),
+      ownedSpells(run)
+    );
     engineRef.bossHook = setup.bossHook ?? null;
     currentNode = node;
+    saveRun(run);
     set({
       phase: 'battle',
       selected: null,
@@ -231,7 +273,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       pendingPromotion: null,
       battle: projectBattle(node, setup.title, setup.flavor),
     });
-    // The starting position is always the player's move in the MVP.
+    // The starting position is always the player's move.
   }
 
   return {
@@ -247,6 +289,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     event: null,
     eventResult: null,
     toast: null,
+    actCleared: null,
 
     startRun(baseElo, seed) {
       const realSeed = seed ?? Math.random().toString(36).slice(2, 10);
@@ -273,8 +316,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           break;
         case 'shop': {
           currentNode = node;
-          const stock = rollShop(run, node.id).map((def) => ({ def, cost: def.cost ?? 50 }));
-          set({ phase: 'shop', shop: { stock } });
+          set({ phase: 'shop', shop: { stock: rollShop(run, node.id) } });
           break;
         }
         case 'event': {
@@ -354,26 +396,36 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ targeting: null });
     },
 
-    claimReward(def) {
+    claimReward(option) {
       const run = get().run!;
-      if (def) {
-        run.relics.push(toOwned(def));
-      }
+      if (option) grantOption(run, option);
+      const cleared = get().actCleared;
       saveRun(run);
+      if (cleared !== null) {
+        // Boss reward claimed — roll straight into the next act.
+        set({ rewardOptions: [], run: { ...run } });
+        get().nextAct();
+        return;
+      }
       set({ phase: 'map', rewardOptions: [], run: { ...run } });
     },
 
-    buyRelic(def) {
+    buyItem(item) {
       const run = get().run!;
-      const cost = def.cost ?? 50;
-      if (run.gold < cost) return;
-      run.gold -= cost;
-      run.relics.push(toOwned(def));
+      if (run.gold < item.cost) return;
+      run.gold -= item.cost;
+      grantOption(run, item);
       const shop = get().shop!;
       saveRun(run);
       set({
         run: { ...run },
-        shop: { stock: shop.stock.filter((s) => s.def.id !== def.id) },
+        // relics are one-time; spells can be re-bought to stack charges
+        shop: {
+          stock:
+            item.kind === 'relic'
+              ? shop.stock.filter((s) => s.def.id !== item.def.id)
+              : shop.stock,
+        },
       });
     },
 
@@ -384,6 +436,37 @@ export const useGameStore = create<GameStore>((set, get) => {
       run.lives += 1;
       saveRun(run);
       set({ run: { ...run } });
+    },
+
+    buyRecharge() {
+      const run = get().run!;
+      if (run.gold < RECHARGE_COST) return;
+      let recharged = false;
+      for (const s of run.spells) {
+        const max = getRelic(s.defId).charges ?? 1;
+        if (s.charges < max) { s.charges = Math.min(s.charges + 1, max); recharged = true; }
+      }
+      if (!recharged) return;
+      run.gold -= RECHARGE_COST;
+      saveRun(run);
+      set({ run: { ...run } });
+    },
+
+    nextAct() {
+      const run = get().run!;
+      run.act += 1;
+      run.map = generateMap(`${run.seed}:act${run.act}`);
+      run.currentNodeId = null;
+      run.usedPuzzles = [];
+      engineRef = null;
+      currentNode = null;
+      saveRun(run);
+      set({
+        phase: 'map',
+        actCleared: null,
+        run: { ...run },
+        toast: `Act ${run.act} — the dead grow bolder. Difficulty rises.`,
+      });
     },
 
     leaveShop() {
@@ -428,7 +511,17 @@ export const useGameStore = create<GameStore>((set, get) => {
         const raw = localStorage.getItem(SAVE_KEY);
         if (!raw) return false;
         const run = JSON.parse(raw) as RunState;
-        if (!run || typeof run.baseElo !== 'number') return false;
+        // Reject saves from an incompatible (older) schema.
+        if (
+          !run ||
+          typeof run.baseElo !== 'number' ||
+          !Array.isArray(run.spells) ||
+          !Array.isArray(run.relics) ||
+          !Array.isArray(run.usedPuzzles)
+        ) {
+          saveRun(null);
+          return false;
+        }
         set({ phase: 'map', run });
         return true;
       } catch {
@@ -439,6 +532,18 @@ export const useGameStore = create<GameStore>((set, get) => {
 });
 
 // ---- helpers (pure) --------------------------------------------------------
+
+// Grant a reward/shop option to the run: relics are added once, spells stack
+// their charges into the run-level pool.
+function grantOption(run: RunState, option: RewardOption): void {
+  if (option.kind === 'relic') {
+    if (!run.relics.some((r) => r.defId === option.def.id)) {
+      run.relics.push({ defId: option.def.id });
+    }
+  } else {
+    grantSpell(run, option.def.id, option.def.charges ?? 1);
+  }
+}
 
 function isPromotionMove(fen: string, from: Square, to: Square): boolean {
   const c = new Chess(fen);

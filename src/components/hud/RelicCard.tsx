@@ -1,16 +1,18 @@
-import type { RelicDef } from '../../relics/relicTypes';
+import type { RewardOption } from '../../run/rewards';
 
 export function RelicCard({
-  def,
+  option,
   cost,
   disabled,
   onClick,
 }: {
-  def: RelicDef;
+  option: RewardOption;
   cost?: number;
   disabled?: boolean;
   onClick: () => void;
 }) {
+  const { def, kind } = option;
+  const isSpell = kind === 'spell';
   return (
     <div
       className={`relic-card rarity-${def.rarity}`}
@@ -19,9 +21,8 @@ export function RelicCard({
     >
       <div className="rc-ico">{def.icon}</div>
       <div className="rc-name">{def.name}</div>
-      <div className={`rc-kind ${def.kind}`}>
-        {def.kind}
-        {def.kind === 'active' && def.charges ? ` · ${def.charges} charge${def.charges > 1 ? 's' : ''}` : ''}
+      <div className={`rc-kind ${isSpell ? 'active' : 'passive'}`}>
+        {isSpell ? `Spell · +${def.charges ?? 1} charges` : 'Relic · passive'}
       </div>
       <div className="rc-desc">{def.description}</div>
       {cost !== undefined && <div className="rc-cost">🪙 {cost}</div>}

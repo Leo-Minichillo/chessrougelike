@@ -30,9 +30,6 @@ export interface BattleCtx {
   // once-per-battle latch: returns true the FIRST time a key is seen, then
   // false forever after (used by Vampiric Edge and other single-use passives)
   once(key: string): boolean;
-
-  // grant +n charges to every active spell this battle (Stockpile)
-  addChargeToAll(n: number): void;
 }
 
 export type RelicKind = 'passive' | 'active' | 'upgrade';

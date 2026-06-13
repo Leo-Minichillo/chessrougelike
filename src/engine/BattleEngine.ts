@@ -20,10 +20,11 @@ import type { BattleCtx, RelicDef } from '../relics/relicTypes';
 
 export type BattlePhase = 'playerInput' | 'aiThinking' | 'won' | 'lost';
 
-// A relic active during this battle, with its remaining charges.
-export interface ActiveRelic {
+// An active spell during this battle, carrying its RUN-LEVEL remaining charges
+// (the engine mutates this copy; the store persists it back after the battle).
+export interface BattleSpell {
   def: RelicDef;
-  charges: number; // remaining; passives use 0 and are always "on"
+  charges: number;
 }
 
 // BattleEngine is the architectural keystone: it owns the live Chess instance,
@@ -34,7 +35,8 @@ export interface ActiveRelic {
 export class BattleEngine implements BattleCtx {
   private chess: Chess;
   readonly objective: Objective;
-  readonly relics: ActiveRelic[];
+  readonly passives: RelicDef[]; // always-on relics
+  readonly spells: BattleSpell[]; // active spells with run-level charges
 
   phase: BattlePhase = 'playerInput';
   version = 0; // bump to signal the UI to re-render
@@ -54,15 +56,18 @@ export class BattleEngine implements BattleCtx {
   // Optional boss hook, run after each AI move (e.g. Necromancer resurrect).
   bossHook: ((engine: BattleEngine) => void) | null = null;
 
-  constructor(startFen: string, objective: Objective, relics: RelicDef[]) {
+  constructor(
+    startFen: string,
+    objective: Objective,
+    passives: RelicDef[],
+    spells: BattleSpell[]
+  ) {
     this.chess = new Chess(startFen);
     this.objective = objective;
-    this.relics = relics.map((def) => ({
-      def,
-      charges: def.kind === 'active' ? def.charges ?? 1 : 0,
-    }));
-    // Run battle-start passives (Stockpile etc.).
-    for (const r of this.relics) r.def.onBattleStart?.(this);
+    this.passives = passives;
+    // Copy spell charges so mutating them here doesn't touch run state directly.
+    this.spells = spells.map((s) => ({ def: s.def, charges: s.charges }));
+    for (const r of this.passives) r.onBattleStart?.(this);
     this.refreshResult();
   }
 
@@ -102,12 +107,6 @@ export class BattleEngine implements BattleCtx {
     if (this.flags.has(key)) return false;
     this.flags.add(key);
     return true;
-  }
-
-  addChargeToAll(n: number): void {
-    for (const r of this.relics) {
-      if (r.def.kind === 'active') r.charges += n;
-    }
   }
 
   enemyPieces(): { square: Square; type: string }[] {
@@ -201,7 +200,7 @@ export class BattleEngine implements BattleCtx {
 
     this.lastMove = { from: move.from, to: move.to };
     const captured = !!result.captured;
-    for (const r of this.relics) r.def.onPlayerMove?.(this, move, captured);
+    for (const r of this.passives) r.onPlayerMove?.(this, move, captured);
 
     this.fullMovesPlayed += 1;
 
@@ -292,15 +291,15 @@ export class BattleEngine implements BattleCtx {
     this.version++;
   }
 
-  // Activate an owned active spell. Returns false (and consumes nothing) if it
-  // can't fire. Target-requiring spells are validated by the caller/store.
+  // Cast an owned spell. Returns false (and consumes nothing) if it can't fire.
+  // Target-requiring spells are validated by the caller/store.
   activateRelic(defId: string, target?: Square): boolean {
     if (this.phase !== 'playerInput') return false;
-    const r = this.relics.find((x) => x.def.id === defId);
-    if (!r || r.def.kind !== 'active' || r.charges <= 0) return false;
+    const s = this.spells.find((x) => x.def.id === defId);
+    if (!s || s.charges <= 0) return false;
     const before = this.version;
-    r.def.activate?.(this, target);
-    r.charges -= 1;
+    s.def.activate?.(this, target);
+    s.charges -= 1;
     this.refreshResult();
     // Even no-op-looking spells (Time Stutter) count as a state change.
     if (this.version === before) this.version++;
@@ -308,7 +307,12 @@ export class BattleEngine implements BattleCtx {
   }
 
   chargesFor(defId: string): number {
-    return this.relics.find((x) => x.def.id === defId)?.charges ?? 0;
+    return this.spells.find((x) => x.def.id === defId)?.charges ?? 0;
+  }
+
+  // Remaining spell charges, for the store to persist back to run state.
+  spellCharges(): { defId: string; charges: number }[] {
+    return this.spells.map((s) => ({ defId: s.def.id, charges: s.charges }));
   }
 
   result(): ObjectiveResult {

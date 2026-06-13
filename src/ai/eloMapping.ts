@@ -67,10 +67,11 @@ export function nodeEloBonus(node: Pick<MapNode, 'type' | 'row'>): number {
 }
 
 // The headline difficulty function: combine the player's base Elo, the node
-// ramp, and the humanize offset into the effective Elo used for this encounter.
+// ramp, the act, and the humanize offset into the effective Elo.
 export function computeEncounterElo(
-  run: Pick<RunState, 'baseElo'>,
+  run: Pick<RunState, 'baseElo' | 'act'>,
   node: Pick<MapNode, 'type' | 'row'>
 ): number {
-  return run.baseElo + nodeEloBonus(node) + ELO_HUMANIZE_OFFSET;
+  const actBonus = (run.act - 1) * 120;
+  return run.baseElo + nodeEloBonus(node) + actBonus + ELO_HUMANIZE_OFFSET;
 }

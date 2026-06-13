@@ -4,6 +4,9 @@ import { rngFromSeed, pick } from '../util/rng';
 // Binary-choice events. Each choice returns a mutation + a result message.
 export interface EventChoice {
   label: string;
+  // Optional gate: when it returns false the choice is shown but disabled
+  // (e.g. you can't gamble 40 gold you don't have).
+  enabled?: (run: RunState) => boolean;
   resolve: (run: RunState) => { message: string };
 }
 export interface GameEvent {
@@ -19,13 +22,11 @@ const EVENTS: GameEvent[] = [
     choices: [
       {
         label: 'Trade a heart for 60 gold',
+        enabled: (run) => run.lives > 1,
         resolve: (run) => {
-          if (run.lives > 1) {
-            run.lives -= 1;
-            run.gold += 60;
-            return { message: 'You feel weaker, but your purse is heavy. (-1 heart, +60 gold)' };
-          }
-          return { message: 'You dare not — it would be your last heart.' };
+          run.lives -= 1;
+          run.gold += 60;
+          return { message: 'You feel weaker, but your purse is heavy. (-1 heart, +60 gold)' };
         },
       },
       {
@@ -40,18 +41,16 @@ const EVENTS: GameEvent[] = [
     choices: [
       {
         label: 'Offer 30 gold for a blessing',
+        enabled: (run) => run.gold >= 30,
         resolve: (run) => {
-          if (run.gold >= 30) {
-            run.gold -= 30;
-            if (run.lives < run.maxLives) {
-              run.lives += 1;
-              return { message: 'Warmth floods your chest. (+1 heart)' };
-            }
-            run.maxLives += 1;
+          run.gold -= 30;
+          if (run.lives < run.maxLives) {
             run.lives += 1;
-            return { message: 'The shrine swells your vigor. (+1 max heart)' };
+            return { message: 'Warmth floods your chest. (+1 heart)' };
           }
-          return { message: 'You lack the coin to make an offering.' };
+          run.maxLives += 1;
+          run.lives += 1;
+          return { message: 'The shrine swells your vigor. (+1 max heart)' };
         },
       },
       {
@@ -69,9 +68,9 @@ const EVENTS: GameEvent[] = [
     choices: [
       {
         label: 'Gamble 40 gold',
+        enabled: (run) => run.gold >= 40,
         resolve: (run) => {
           const rng = rngFromSeed(`${run.seed}:gamble:${run.currentNodeId}`);
-          if (run.gold < 40) return { message: 'You have nothing to wager.' };
           if (rng() < 0.5) {
             run.gold += 40;
             return { message: 'The dice favor you! (+40 gold)' };

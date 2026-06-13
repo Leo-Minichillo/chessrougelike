@@ -38,16 +38,15 @@ export const RELICS: RelicDef[] = [
     },
   },
   {
-    id: 'stockpile',
-    name: 'Stockpile',
+    id: 'reliquary',
+    name: 'Reliquary',
     kind: 'passive',
-    rarity: 'uncommon',
-    icon: '📦',
-    cost: 55,
-    description: 'Start each battle with +1 charge on all of your spells.',
-    onBattleStart(ctx) {
-      ctx.addChargeToAll(1);
-    },
+    rarity: 'rare',
+    icon: '🔮',
+    cost: 80,
+    description: 'After each victory, restore 1 charge to every spell you own.',
+    // Effect is applied at the run level after a win (see useGameStore), since
+    // spell charges persist across battles rather than refilling each fight.
   },
   {
     id: 'vampiric-edge',
@@ -82,7 +81,7 @@ export const RELICS: RelicDef[] = [
     charges: 2,
     cost: 90,
     requiresTarget: null,
-    description: 'Take two moves in a row. (2 charges per battle.)',
+    description: 'Take two moves in a row.',
     activate(ctx) {
       ctx.grantExtraMove();
       ctx.log('Time Stutter: the clock stutters — move again!');
@@ -94,7 +93,7 @@ export const RELICS: RelicDef[] = [
     kind: 'active',
     rarity: 'uncommon',
     icon: '❄️',
-    charges: 1,
+    charges: 2,
     cost: 65,
     requiresTarget: 'enemyPiece',
     description: 'Freeze an enemy piece — it cannot move on the next enemy turn.',
@@ -110,7 +109,7 @@ export const RELICS: RelicDef[] = [
     kind: 'active',
     rarity: 'uncommon',
     icon: '🐴',
-    charges: 1,
+    charges: 2,
     cost: 70,
     requiresTarget: 'emptyBackRank',
     description: 'Summon a knight on any empty square of your back rank.',
@@ -128,7 +127,7 @@ export const RELICS: RelicDef[] = [
     kind: 'active',
     rarity: 'rare',
     icon: '⭐',
-    charges: 1,
+    charges: 2,
     cost: 95,
     requiresTarget: 'ownPawn',
     description: 'Instantly promote one of your pawns to a queen.',
@@ -146,7 +145,7 @@ export const RELICS: RelicDef[] = [
     kind: 'active',
     rarity: 'rare',
     icon: '💥',
-    charges: 1,
+    charges: 2,
     cost: 110,
     requiresTarget: 'enemyPiece',
     description: 'Remove one enemy piece from the board. (Cannot target the king.)',
@@ -169,3 +168,7 @@ export function getRelic(id: string): RelicDef {
   if (!r) throw new Error(`unknown relic: ${id}`);
   return r;
 }
+
+// Passive relics vs active spells, for reward/shop pools.
+export const PASSIVE_RELICS = RELICS.filter((r) => r.kind === 'passive');
+export const SPELLS = RELICS.filter((r) => r.kind === 'active');

@@ -3,7 +3,7 @@ import type { Objective } from '../engine/objectives';
 import type { BattleEngine } from '../engine/BattleEngine';
 import { placePiece } from '../engine/fenUtils';
 import { AI_COLOR } from '../engine/types';
-import { rngFromSeed, pick } from '../util/rng';
+import { rngFromSeed, shuffle } from '../util/rng';
 
 export interface EncounterSetup {
   fen: string;
@@ -13,93 +13,90 @@ export interface EncounterSetup {
   bossHook?: (engine: BattleEngine) => void;
 }
 
-// Every battle is a "White to mate" puzzle: you start with a decisive edge and
-// must checkmate a defending AI. Difficulty escalates by tier (1 = overwhelming
-// force, 5 = lean advantage / sharp technique). All positions are validated in
-// tests/encounters.test.ts (legal, White to move, not terminal, White winning).
 interface Puzzle {
   fen: string;
   title: string;
   flavor: string;
 }
 
+// Every battle is a "White to mate" puzzle. You start ahead and must checkmate a
+// defending AI — these are NOT one-move mates. Difficulty escalates by tier:
+// lower tiers hand you a crushing material edge, higher tiers a slim one (or a
+// crowded board) where you'll want to spend spells (Banish a defender, Conscript
+// an attacker, Time Stutter for tempo) to break through. All positions are
+// validated in tests (legal, White to move, not terminal, White ahead).
 const TIERS: Record<number, Puzzle[]> = {
   1: [
     {
-      fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1',
-      title: 'The Back Rank',
-      flavor: 'Their king is boxed in by its own guard. One rook ends it.',
+      fen: 'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      title: 'Queenslayer',
+      flavor: 'They march to war without their queen. Convert the edge into mate.',
     },
     {
-      fen: '6k1/5ppp/8/8/8/8/5PPP/3QR1K1 w - - 0 1',
-      title: 'Overwhelming Force',
-      flavor: 'Queen and rook against a lone king. Crush it.',
-    },
-    {
-      fen: '6k1/5ppp/8/8/8/8/5PPP/R5RK w - - 0 1',
-      title: 'The Ladder',
-      flavor: 'Two towers, marching rank by rank. Drive the king to the edge.',
+      fen: 'r3k3/8/8/8/8/8/4PPPP/R2QK2R w KQ - 0 1',
+      title: 'Overrun',
+      flavor: 'Queen and two rooks against a lone tower. Hunt the king down.',
     },
   ],
   2: [
     {
-      fen: '6k1/5p1p/8/8/8/8/5P1P/5QK1 w - - 0 1',
-      title: 'Royal Hunt',
-      flavor: 'Your queen alone can run the enemy king to ground.',
+      fen: '1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk - 0 1',
+      title: 'The Missing Tower',
+      flavor: 'A rook to the good. Now turn material into a mating net.',
     },
     {
-      fen: '4k3/pp3ppp/8/8/8/8/PP3PPP/3QK3 w - - 0 1',
-      title: 'A Crown for the Taking',
-      flavor: 'Up a full queen. Find the mating net before they consolidate.',
+      fen: 'rnbqkbn1/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQq - 0 1',
+      title: 'Castle Felled',
+      flavor: 'Their right flank is undefended. Pour through it.',
     },
   ],
   3: [
     {
-      fen: '3rk3/3ppp2/8/8/8/8/3PPP2/3QK3 w - - 0 1',
-      title: 'Outgun the Guard',
-      flavor: 'Queen against rook. Trade the difference into a mate.',
+      fen: 'r2qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      title: 'Broken Vanguard',
+      flavor: 'Up a bishop and a knight — but the board is full. Find the king.',
     },
     {
-      fen: '3rk3/pp3ppp/8/8/8/8/PP3PPP/3RKR2 w - - 0 1',
-      title: 'The Heavy Brigade',
-      flavor: 'An extra rook is all the edge a patient attacker needs.',
-    },
-    {
-      fen: '4k3/8/8/8/8/8/8/R3K3 w - - 0 1',
-      title: 'Rook & Technique',
-      flavor: 'Bare king, bare rook. Pure mating technique — no margin for error.',
+      fen: 'rnbqk2r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      title: 'Kingside Collapse',
+      flavor: 'Their king has lost its shield. Strike before they regroup.',
     },
   ],
   4: [
     {
-      fen: '2r1k3/4pp2/8/8/8/8/4PP2/3QK3 w - - 0 1',
-      title: 'Razor Margin',
-      flavor: 'A queen for a rook, and little else. Precision only.',
+      fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      title: "A Knight's Edge",
+      flavor: 'Only a single piece ahead against a full army. You may need help.',
     },
     {
-      fen: '4k3/1p3p2/8/8/8/8/1P3P2/R3K3 w - - 0 1',
-      title: 'Lone Tower',
-      flavor: 'One rook, two pawns a side. Shepherd the king to checkmate.',
+      fen: 'rn1qkbnr/pppp1ppp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1',
+      title: 'Open Lines',
+      flavor: 'A bishop up, the centre cracked open. Aim everything at the king.',
+    },
+  ],
+  5: [
+    {
+      fen: 'r1bqkbnr/pppp1ppp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1',
+      title: 'Slim Margin',
+      flavor: 'Barely ahead, the board crowded. Without your spells, this is grim.',
+    },
+    {
+      fen: 'rn1qkbnr/pp4pp/8/8/8/8/PP4PP/RNBQKBNR w KQkq - 0 1',
+      title: 'The Long Diagonal',
+      flavor: 'An open, brutal position. Spend a spell, or be ground down.',
     },
   ],
 };
 
+// Boss position (paired with the Necromancer gimmick): you are up a queen, but
+// every third turn it revives a fallen piece, so the edge erodes — mate fast.
 const BOSS: Puzzle = {
-  fen: 'r3k3/pp2pppp/8/8/8/8/PP1QPPPP/4K3 w - - 0 1',
+  fen: 'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   title: 'The Necromancer',
   flavor:
-    'Up a queen for a rook — but every third turn it drags a fallen soldier back from the grave. Mate it before the dead pile up.',
+    'Up a queen — but every third turn it drags a fallen soldier back from the grave. Mate it before the dead pile up.',
 };
 
-function puzzleForTier(tier: number, seed: string): Puzzle {
-  // clamp to an available tier, then pick deterministically by seed
-  let t = Math.max(1, Math.min(4, tier));
-  while (!TIERS[t] || TIERS[t].length === 0) t--;
-  return pick(rngFromSeed(seed), TIERS[t]);
-}
-
-// The Necromancer boss gimmick: every 3rd AI move, resurrect its most recently
-// captured piece on an empty square of its back rank (rank 8).
 function necromancerHook(engine: BattleEngine): void {
   if (engine.aiMoveCounter % 3 !== 0) return;
   const type = engine.lastAiCapturedType;
@@ -121,16 +118,43 @@ function necromancerHook(engine: BattleEngine): void {
   }
 }
 
-// Map a node to a difficulty tier. Battles ramp with map depth; elites and the
-// puzzle node are a notch harder; the boss is its own set piece.
-function tierForNode(node: MapNode): number {
-  if (node.type === 'elite') return Math.min(4, 2 + Math.floor(node.row / 3));
-  if (node.type === 'puzzle') return 4;
-  return Math.max(1, Math.min(4, 1 + Math.floor(node.row / 2)));
+const MAX_TIER = 5;
+
+// Difficulty tier for a node: battles ramp with map depth and act; elites and
+// the dedicated puzzle node are harder.
+export function tierForNode(node: MapNode, act: number): number {
+  const actBump = act - 1;
+  let tier: number;
+  if (node.type === 'elite') tier = 3 + Math.floor(node.row / 3) + actBump;
+  else if (node.type === 'puzzle') tier = 4 + actBump;
+  else tier = 1 + Math.floor(node.row / 2) + actBump;
+  return Math.max(1, Math.min(MAX_TIER, tier));
 }
 
-export function buildEncounter(node: MapNode, seed: string): EncounterSetup {
-  const seedKey = `${seed}:${node.id}`;
+// Pick a puzzle of the given tier that the player hasn't seen this run; fall
+// back to a wider/already-seen pool only if necessary.
+function pickPuzzle(tier: number, seed: string, used: Set<string>): Puzzle {
+  const rng = rngFromSeed(seed);
+  // search the target tier, then expand outward, preferring unused puzzles
+  const order: number[] = [tier];
+  for (let d = 1; d < MAX_TIER; d++) {
+    if (tier - d >= 1) order.push(tier - d);
+    if (tier + d <= MAX_TIER) order.push(tier + d);
+  }
+  for (const t of order) {
+    const unused = shuffle(rng, TIERS[t].filter((p) => !used.has(p.fen)));
+    if (unused.length > 0) return unused[0];
+  }
+  // everything seen — just return something from the target tier
+  return shuffle(rng, TIERS[Math.max(1, Math.min(MAX_TIER, tier))])[0];
+}
+
+export function buildEncounter(
+  node: MapNode,
+  seed: string,
+  used: Set<string> = new Set(),
+  act = 1
+): EncounterSetup {
   if (node.type === 'boss') {
     return {
       fen: BOSS.fen,
@@ -140,7 +164,8 @@ export function buildEncounter(node: MapNode, seed: string): EncounterSetup {
       bossHook: necromancerHook,
     };
   }
-  const puzzle = puzzleForTier(tierForNode(node), seedKey);
+  const tier = tierForNode(node, act);
+  const puzzle = pickPuzzle(tier, `${seed}:${node.id}`, used);
   return {
     fen: puzzle.fen,
     objective: { type: 'checkmate' }, // every battle is won by checkmate
@@ -149,8 +174,4 @@ export function buildEncounter(node: MapNode, seed: string): EncounterSetup {
   };
 }
 
-// Exposed for tests: every curated position.
-export const ALL_PUZZLES: Puzzle[] = [
-  ...Object.values(TIERS).flat(),
-  BOSS,
-];
+export const ALL_PUZZLES: Puzzle[] = [...Object.values(TIERS).flat(), BOSS];

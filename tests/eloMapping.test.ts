@@ -54,13 +54,19 @@ describe('encounter escalation', () => {
   });
 
   it('applies the humanize offset to base elo', () => {
-    const eff = computeEncounterElo({ baseElo: 1500 }, { type: 'battle', row: 0 });
+    const eff = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
     expect(eff).toBe(1500 + ELO_HUMANIZE_OFFSET);
   });
 
   it('ramps battle difficulty with map depth', () => {
-    const early = computeEncounterElo({ baseElo: 1500 }, { type: 'battle', row: 0 });
-    const late = computeEncounterElo({ baseElo: 1500 }, { type: 'battle', row: 6 });
+    const early = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
+    const late = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 6 });
     expect(late).toBeGreaterThan(early);
+  });
+
+  it('later acts are harder', () => {
+    const a1 = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
+    const a3 = computeEncounterElo({ baseElo: 1500, act: 3 }, { type: 'battle', row: 0 });
+    expect(a3).toBeGreaterThan(a1);
   });
 });

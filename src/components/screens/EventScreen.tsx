@@ -5,7 +5,8 @@ export function EventScreen() {
   const eventResult = useGameStore((s) => s.eventResult);
   const resolveEvent = useGameStore((s) => s.resolveEvent);
   const leaveEvent = useGameStore((s) => s.leaveEvent);
-  if (!event) return null;
+  const run = useGameStore((s) => s.run);
+  if (!event || !run) return null;
 
   return (
     <div className="panel center" style={{ maxWidth: 620, margin: '4vh auto 0' }}>
@@ -14,11 +15,20 @@ export function EventScreen() {
 
       {!eventResult ? (
         <div className="col" style={{ marginTop: 18 }}>
-          {event.choices.map((c, i) => (
-            <button key={i} className="btn" onClick={() => resolveEvent(i)}>
-              {c.label}
-            </button>
-          ))}
+          {event.choices.map((c, i) => {
+            const disabled = c.enabled ? !c.enabled(run) : false;
+            return (
+              <button
+                key={i}
+                className="btn"
+                disabled={disabled}
+                onClick={() => resolveEvent(i)}
+              >
+                {c.label}
+                {disabled && <span className="muted"> — not enough</span>}
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div className="col" style={{ marginTop: 18 }}>
