@@ -1,26 +1,50 @@
 import { describe, it, expect } from 'vitest';
 import { Chess } from 'chess.js';
 import { generateMap, findNode, availableNodes } from '../src/map/mapGen';
-import { buildEncounter } from '../src/run/encounters';
+import { buildEncounter, ALL_PUZZLES } from '../src/run/encounters';
 import { validateFen } from '../src/engine/fenUtils';
+import { materialBalance } from '../src/engine/objectives';
 import { chooseMove } from '../src/ai/minimax';
 import { eloToEngineConfig } from '../src/ai/eloMapping';
 import type { NodeType } from '../src/map/mapTypes';
 
-describe('encounter positions', () => {
+describe('curated puzzles', () => {
+  for (const p of ALL_PUZZLES) {
+    it(`"${p.title}" is legal, White to move, not terminal, and winning`, () => {
+      expect(validateFen(p.fen).ok).toBe(true);
+      const c = new Chess(p.fen);
+      expect(c.turn()).toBe('w'); // player is always White
+      expect(c.isGameOver()).toBe(false);
+      expect(c.inCheck()).toBe(false); // player shouldn't start in check
+      // White must be decisively ahead (at least a rook, ~+3 floor for safety).
+      expect(materialBalance(p.fen)).toBeGreaterThanOrEqual(3);
+    });
+  }
+});
+
+describe('encounter wiring', () => {
   const types: NodeType[] = ['battle', 'elite', 'puzzle', 'boss'];
   for (const type of types) {
-    it(`${type} starts from a legal, white-to-move position`, () => {
+    it(`${type} uses a checkmate objective from a legal position`, () => {
       const setup = buildEncounter(
-        { id: 'x', type, row: 1, col: 0, edges: [], visited: false },
+        { id: 'x', type, row: 3, col: 0, edges: [], visited: false },
         'seed'
       );
+      expect(setup.objective).toEqual({ type: 'checkmate' });
       expect(validateFen(setup.fen).ok).toBe(true);
       const c = new Chess(setup.fen);
       expect(c.turn()).toBe('w');
       expect(c.isGameOver()).toBe(false);
     });
   }
+
+  it('the boss carries its resurrect gimmick', () => {
+    const setup = buildEncounter(
+      { id: 'boss', type: 'boss', row: 7, col: 0, edges: [], visited: false },
+      'seed'
+    );
+    expect(setup.bossHook).toBeTypeOf('function');
+  });
 });
 
 describe('map generation', () => {

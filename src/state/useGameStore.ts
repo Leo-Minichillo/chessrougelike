@@ -41,6 +41,8 @@ export interface BattleView {
   objectiveLabel: string;
   materialBalance: number;
   frozen: Square[];
+  lastMove: { from: Square; to: Square } | null;
+  checkedKing: Square | null;
   logs: string[];
   relics: { def: RelicDef; charges: number; usable: boolean }[];
   title: string;
@@ -123,6 +125,8 @@ function projectBattle(node: MapNode, title: string, flavor: string): BattleView
     objectiveLabel: objectiveLabel(e.objective),
     materialBalance: e.materialBalance(),
     frozen: e.frozenSquares(),
+    lastMove: e.lastMove,
+    checkedKing: e.checkedKingSquare(),
     logs: e.logs.slice(-6),
     relics: e.relics.map((r) => ({
       def: r.def,
@@ -145,10 +149,13 @@ export const useGameStore = create<GameStore>((set, get) => {
     const move = await getEngine().getBestMove(fen, engineConfig!);
     // The engine state may have changed if the user abandoned; re-check.
     if (engineRef !== e) return;
-    if (move) e.applyAiMove(move, restored);
-    else {
-      // No move (shouldn't happen) — pass turn back.
-      e.applyAiMove({ from: 'a1', to: 'a1' }, restored);
+    if (move) {
+      e.applyAiMove(move, restored);
+    } else {
+      // No legal move means the AI is checkmated or stalemated. Don't apply a
+      // dummy move (that would loop forever); just re-evaluate the terminal
+      // state so the battle resolves cleanly.
+      e.resolveTerminal();
     }
     syncBattle();
     if (e.phase === 'aiThinking') void runAiTurn(); // safety (extra AI move)

@@ -35,6 +35,8 @@ export function BattleScreen() {
           legalTargets={legalTargets}
           frozen={battle.frozen}
           targetingTargets={targeting?.validTargets ?? []}
+          lastMove={battle.lastMove}
+          checkedKing={battle.checkedKing}
           interactive={interactive && !pendingPromotion}
           onSquareClick={clickSquare}
         />
@@ -121,7 +123,10 @@ export function BattleScreen() {
             <div className="promo-pick">
               {(['q', 'r', 'b', 'n'] as const).map((p) => (
                 <div key={p} className="promo" onClick={() => choosePromotion(p)}>
-                  {{ q: '♛', r: '♜', b: '♝', n: '♞' }[p]}
+                  <img
+                    src={`${import.meta.env.BASE_URL}pieces/cburnett/w${p.toUpperCase()}.svg`}
+                    alt={p}
+                  />
                 </div>
               ))}
             </div>

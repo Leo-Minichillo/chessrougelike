@@ -45,6 +45,8 @@ export class BattleEngine implements BattleCtx {
   private extraMoves = 0;
   private frozen = new Set<Square>();
   private flags = new Set<string>();
+  // The most recent move (either side), for board highlighting.
+  lastMove: { from: Square; to: Square } | null = null;
   // The most recently captured AI piece, for the Necromancer boss gimmick.
   lastAiCapturedType: string | null = null;
   aiMoveCounter = 0;
@@ -161,6 +163,19 @@ export class BattleEngine implements BattleCtx {
     return this.frozen.has(square);
   }
 
+  // Square of the king currently in check (for the board's check highlight),
+  // or null if nobody is in check.
+  checkedKingSquare(): Square | null {
+    if (!this.chess.inCheck()) return null;
+    const side = this.chess.turn();
+    for (const row of this.chess.board()) {
+      for (const sq of row) {
+        if (sq && sq.type === 'k' && sq.color === side) return sq.square;
+      }
+    }
+    return null;
+  }
+
   frozenSquares(): Square[] {
     return [...this.frozen];
   }
@@ -184,6 +199,7 @@ export class BattleEngine implements BattleCtx {
     }
     if (!result) return false;
 
+    this.lastMove = { from: move.from, to: move.to };
     const captured = !!result.captured;
     for (const r of this.relics) r.def.onPlayerMove?.(this, move, captured);
 
@@ -246,8 +262,9 @@ export class BattleEngine implements BattleCtx {
     if (!result) {
       // Engine returned an unusable move; skip the AI turn rather than corrupt.
       this.log('(enemy hesitates)');
-    } else if (result.captured) {
-      this.lastAiCapturedType = result.captured;
+    } else {
+      this.lastMove = { from: move.from, to: move.to };
+      if (result.captured) this.lastAiCapturedType = result.captured;
     }
 
     // Restore frozen pieces onto squares the AI did not move into.
@@ -301,6 +318,14 @@ export class BattleEngine implements BattleCtx {
     });
   }
 
+  // Re-evaluate the terminal state without making a move. Called when the AI
+  // has no legal move (checkmate / stalemate) so the battle resolves instead of
+  // looping on the AI's turn.
+  resolveTerminal(): void {
+    this.refreshResult();
+    this.version++;
+  }
+
   // Recompute phase from the objective result + whose turn it is.
   private refreshResult(): void {
     const res = this.result();
@@ -310,6 +335,13 @@ export class BattleEngine implements BattleCtx {
     }
     if (res === 'loss') {
       this.phase = 'lost';
+      return;
+    }
+    // Safety: if the side to move has no legal moves but the objective didn't
+    // already resolve, the game is over (mate/stalemate) — never sit in a
+    // thinking state the engine can't escape.
+    if (this.chess.isGameOver()) {
+      this.phase = this.chess.isCheckmate() && this.chess.turn() === AI_COLOR ? 'won' : 'lost';
       return;
     }
     this.phase = this.chess.turn() === PLAYER_COLOR ? 'playerInput' : 'aiThinking';

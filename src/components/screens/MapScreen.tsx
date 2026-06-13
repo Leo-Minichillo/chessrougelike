@@ -19,18 +19,20 @@ export function MapScreen() {
         <h3 className="center" style={{ marginTop: 0 }}>
           Act {run.act} — choose your path
         </h3>
-        {[...run.map.rows].reverse().map((row, ri) => (
-          <div className="map-row" key={ri}>
-            {row.map((node) => (
-              <NodeButton
-                key={node.id}
-                node={node}
-                reachable={reachable.has(node.id)}
-                onClick={() => reachable.has(node.id) && chooseNode(node.id)}
-              />
-            ))}
-          </div>
-        ))}
+        <div className="map-rows">
+          {[...run.map.rows].reverse().map((row, ri) => (
+            <div className="map-row" key={ri}>
+              {row.map((node) => (
+                <NodeButton
+                  key={node.id}
+                  node={node}
+                  reachable={reachable.has(node.id)}
+                  onClick={() => reachable.has(node.id) && chooseNode(node.id)}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="sidebar">
