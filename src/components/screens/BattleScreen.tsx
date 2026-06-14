@@ -37,6 +37,17 @@ export function BattleScreen() {
           <div className="muted" style={{ fontSize: 13 }}>{battle.flavor}</div>
           <div style={{ marginTop: 4 }}>
             🎯 <span className="obj">{battle.objectiveLabel}</span>
+            {battle.moveLimit !== null && (
+              <span
+                className="move-counter"
+                style={{
+                  color:
+                    battle.movesUsed >= battle.moveLimit ? 'var(--danger)' : 'var(--ink-dim)',
+                }}
+              >
+                {' '}— move {battle.movesUsed} / {battle.moveLimit}
+              </span>
+            )}
           </div>
         </div>
 

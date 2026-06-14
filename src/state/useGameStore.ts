@@ -43,6 +43,8 @@ export interface BattleView {
   fen: string;
   phase: BattlePhase;
   objectiveLabel: string;
+  movesUsed: number;
+  moveLimit: number | null;
   materialBalance: number;
   frozen: Square[];
   lastMove: { from: Square; to: Square } | null;
@@ -135,6 +137,8 @@ function projectBattle(node: MapNode, title: string, flavor: string): BattleView
     fen: e.currentFen,
     phase: e.phase,
     objectiveLabel: objectiveLabel(e.objective),
+    movesUsed: e.fullMovesPlayed,
+    moveLimit: e.objective.type === 'mateInN' ? e.objective.n : null,
     materialBalance: e.materialBalance(),
     frozen: e.frozenSquares(),
     lastMove: e.lastMove,

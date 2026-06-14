@@ -1,17 +1,76 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../state/useGameStore';
 import { availableNodes } from '../../map/mapGen';
 import { NODE_ICON, NODE_LABEL, type MapNode } from '../../map/mapTypes';
 import { getRelic } from '../../relics/relicDefs';
 import { MAX_ACTS } from '../../run/runState';
 
+interface Line {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  active: boolean;
+}
+
 export function MapScreen() {
   const run = useGameStore((s) => s.run);
   const chooseNode = useGameStore((s) => s.chooseNode);
   const abandonRun = useGameStore((s) => s.abandonRun);
   const toast = useGameStore((s) => s.toast);
-  if (!run) return null;
 
-  const reachable = new Set(availableNodes(run.map, run.currentNodeId).map((n) => n.id));
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const nodeEls = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [lines, setLines] = useState<Line[]>([]);
+
+  const reachable = run
+    ? new Set(availableNodes(run.map, run.currentNodeId).map((n) => n.id))
+    : new Set<string>();
+
+  // Measure node centers and build connector lines between each node and its
+  // edge targets. Recomputed on layout changes and window resize.
+  useLayoutEffect(() => {
+    if (!run) return;
+    const compute = () => {
+      const wrap = wrapRef.current;
+      if (!wrap) return;
+      const w = wrap.getBoundingClientRect();
+      const out: Line[] = [];
+      for (const row of run.map.rows) {
+        for (const node of row) {
+          const fromEl = nodeEls.current.get(node.id);
+          if (!fromEl) continue;
+          const fr = fromEl.getBoundingClientRect();
+          const fx = fr.left + fr.width / 2 - w.left;
+          const fy = fr.top + fr.height / 2 - w.top;
+          for (const eId of node.edges) {
+            const toEl = nodeEls.current.get(eId);
+            if (!toEl) continue;
+            const tr = toEl.getBoundingClientRect();
+            out.push({
+              x1: fx,
+              y1: fy,
+              x2: tr.left + tr.width / 2 - w.left,
+              y2: tr.top + tr.height / 2 - w.top,
+              // glow the edges that lead to a currently-reachable node
+              active: reachable.has(eId),
+            });
+          }
+        }
+      }
+      setLines(out);
+    };
+    compute();
+    const t = setTimeout(compute, 120); // re-measure after fonts/layout settle
+    window.addEventListener('resize', compute);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', compute);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.map, run?.currentNodeId]);
+
+  if (!run) return null;
 
   return (
     <div className="map-wrap">
@@ -20,19 +79,37 @@ export function MapScreen() {
         <h3 className="center" style={{ marginTop: 0 }}>
           Act {run.act} of {MAX_ACTS} — choose your path
         </h3>
-        <div className="map-rows">
-          {[...run.map.rows].reverse().map((row, ri) => (
-            <div className="map-row" key={ri}>
-              {row.map((node) => (
-                <NodeButton
-                  key={node.id}
-                  node={node}
-                  reachable={reachable.has(node.id)}
-                  onClick={() => reachable.has(node.id) && chooseNode(node.id)}
-                />
-              ))}
-            </div>
-          ))}
+        <div className="map-graph" ref={wrapRef}>
+          <svg className="map-edges">
+            {lines.map((l, i) => (
+              <line
+                key={i}
+                x1={l.x1}
+                y1={l.y1}
+                x2={l.x2}
+                y2={l.y2}
+                className={l.active ? 'edge active' : 'edge'}
+              />
+            ))}
+          </svg>
+          <div className="map-rows">
+            {[...run.map.rows].reverse().map((row, ri) => (
+              <div className="map-row" key={ri}>
+                {row.map((node) => (
+                  <NodeButton
+                    key={node.id}
+                    node={node}
+                    reachable={reachable.has(node.id)}
+                    refCb={(el) => {
+                      if (el) nodeEls.current.set(node.id, el);
+                      else nodeEls.current.delete(node.id);
+                    }}
+                    onClick={() => reachable.has(node.id) && chooseNode(node.id)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -96,10 +173,12 @@ export function MapScreen() {
 function NodeButton({
   node,
   reachable,
+  refCb,
   onClick,
 }: {
   node: MapNode;
   reachable: boolean;
+  refCb: (el: HTMLDivElement | null) => void;
   onClick: () => void;
 }) {
   const cls = [
@@ -109,7 +188,7 @@ function NodeButton({
     node.visited ? 'visited' : '',
   ].join(' ');
   return (
-    <div className={cls} onClick={onClick}>
+    <div className={cls} ref={refCb} onClick={onClick}>
       <span className="ico">{NODE_ICON[node.type]}</span>
       <span className="lbl">{NODE_LABEL[node.type]}</span>
     </div>

@@ -18,99 +18,45 @@ interface Puzzle {
   title: string;
   flavor: string;
 }
+interface MatePuzzle extends Puzzle {
+  mateIn: number;
+}
 
-// Every battle is a "White to mate" puzzle. You start ahead and must checkmate a
-// defending AI — these are NOT one-move mates. Difficulty escalates by tier:
-// lower tiers hand you a crushing material edge, higher tiers a slim one (or a
-// crowded board) where you'll want to spend spells (Banish a defender, Conscript
-// an attacker, Time Stutter for tempo) to break through. All positions are
-// validated in tests (legal, White to move, not terminal, White ahead).
-const TIERS: Record<number, Puzzle[]> = {
-  1: [
-    {
-      fen: 'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      title: 'Queenslayer',
-      flavor: 'They march to war without their queen. Convert the edge into mate.',
-    },
-    {
-      fen: 'r3k3/8/8/8/8/8/4PPPP/R2QK2R w KQ - 0 1',
-      title: 'Overrun',
-      flavor: 'Queen and two rooks against a lone tower. Hunt the king down.',
-    },
-  ],
-  2: [
-    {
-      fen: '1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk - 0 1',
-      title: 'The Missing Tower',
-      flavor: 'A rook to the good. Now turn material into a mating net.',
-    },
-    {
-      fen: 'rnbqkbn1/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQq - 0 1',
-      title: 'Castle Felled',
-      flavor: 'Their right flank is undefended. Pour through it.',
-    },
-  ],
-  3: [
-    {
-      fen: 'r2qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      title: 'Broken Vanguard',
-      flavor: 'Up a bishop and a knight — but the board is full. Find the king.',
-    },
-    {
-      fen: 'rnbqk2r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      title: 'Kingside Collapse',
-      flavor: 'Their king has lost its shield. Strike before they regroup.',
-    },
-  ],
-  4: [
-    {
-      fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      title: "A Knight's Edge",
-      flavor: 'Only a single piece ahead against a full army. You may need help.',
-    },
-    {
-      fen: 'rn1qkbnr/pppp1ppp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1',
-      title: 'Open Lines',
-      flavor: 'A bishop up, the centre cracked open. Aim everything at the king.',
-    },
-  ],
-  5: [
-    {
-      fen: 'r1bqkbnr/pppp1ppp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1',
-      title: 'Slim Margin',
-      flavor: 'Barely ahead, the board crowded. Without your spells, this is grim.',
-    },
-    {
-      fen: 'rn1qkbnr/pp4pp/8/8/8/8/PP4PP/RNBQKBNR w KQkq - 0 1',
-      title: 'The Long Diagonal',
-      flavor: 'An open, brutal position. Spend a spell, or be ground down.',
-    },
-  ],
-};
-
-// Elite battles: full boards (so the game runs long) with only a slim, single-
-// minor advantage (so they're genuinely hard and reward spending spells). Paired
-// with a big Elo bump in eloMapping.
-const ELITE: Puzzle[] = [
-  {
-    fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    title: 'The Champion of the Wood',
-    flavor: 'A full enemy army, and you only a knight ahead. This will be a long fight.',
-  },
-  {
-    fen: 'rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    title: 'Warden of the Gate',
-    flavor: 'Barely ahead against a complete host. Grind it down — or break it with magic.',
-  },
-  {
-    fen: 'rn1qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    title: 'The Iron Marshal',
-    flavor: 'One bishop to the good, nothing else. Patience and spells win this.',
-  },
+// Real, composed "mate in N" puzzles on deliberately sparse / unusual boards
+// (these are not positions you'd reach in a normal game). Each is a FORCED mate
+// for White against best defence — verified by tests/puzzles.test.ts using the
+// mate solver. Normal and puzzle nodes draw from here, with a move limit.
+const MATE_PUZZLES: MatePuzzle[] = [
+  // ---- mate in 1 ----
+  { mateIn: 1, fen: '3k4/3Q4/3K4/8/8/8/8/8 w - - 0 1', title: 'Face to Face', flavor: 'King opposes king. One blow ends it.' },
+  { mateIn: 1, fen: 'k7/2K5/8/8/8/8/8/R7 w - - 0 1', title: 'Corner Trap', flavor: 'The enemy king is wedged in the corner. Strike.' },
+  { mateIn: 1, fen: '7k/8/7K/8/8/8/8/Q7 w - - 0 1', title: 'The Guillotine', flavor: 'One queen, one move, one fallen king.' },
+  { mateIn: 1, fen: '4k3/8/4K3/8/8/8/7Q/8 w - - 0 1', title: 'Opposition', flavor: 'Your king holds the line. Let the queen fall.' },
+  { mateIn: 1, fen: '7k/8/6K1/8/8/8/8/R7 w - - 0 1', title: 'Edge of the World', flavor: 'Driven to the rim. Finish the job.' },
+  { mateIn: 1, fen: '3k4/8/3K4/8/8/8/8/7R w - - 0 1', title: 'The Long File', flavor: 'A single rook, perfectly placed.' },
+  // ---- mate in 2 ----
+  { mateIn: 2, fen: 'k7/8/2K5/8/8/8/8/7Q w - - 0 1', title: 'The Net Tightens', flavor: 'Two precise moves and the corner becomes a tomb.' },
+  { mateIn: 2, fen: '6k1/8/5K2/8/8/8/8/7Q w - - 0 1', title: 'Two to Fall', flavor: 'Herd the king, then deliver the blow.' },
+  { mateIn: 2, fen: 'k7/2K4Q/8/8/8/8/8/8 w - - 0 1', title: 'Royal Pursuit', flavor: 'The queen closes the last escape.' },
+  { mateIn: 2, fen: 'k7/8/3K4/8/8/8/8/7Q w - - 0 1', title: 'Closing In', flavor: 'Find the quiet move, then the kill.' },
+  { mateIn: 2, fen: 'k7/8/2K5/8/8/8/8/4Q3 w - - 0 1', title: 'The Coffin', flavor: 'Seal every square. Two moves.' },
+  { mateIn: 2, fen: '7k/8/5K2/8/8/8/8/Q7 w - - 0 1', title: 'Long Range', flavor: 'The queen rules from afar.' },
+  { mateIn: 2, fen: 'k7/8/2K5/8/8/8/8/1R6 w - - 0 1', title: "Rook's Gambit", flavor: 'A lone rook, and a king with nowhere to run.' },
+  { mateIn: 2, fen: '6k1/8/5K2/8/8/8/8/7R w - - 0 1', title: "The Ladder's End", flavor: 'Two rungs from checkmate.' },
+  { mateIn: 2, fen: 'k7/8/2KQ4/8/8/8/8/8 w - - 0 1', title: 'Smother', flavor: 'King and queen, hand in glove.' },
+  // ---- mate in 3 ----
+  { mateIn: 3, fen: 'k7/1R6/2K5/8/8/8/8/8 w - - 0 1', title: 'The Long Walk', flavor: 'Pure technique — rook and king drive the quarry to mate.' },
+  { mateIn: 3, fen: '7k/6R1/5K2/8/8/8/8/8 w - - 0 1', title: 'Endgame Mastery', flavor: 'Three exact moves. No room for error.' },
 ];
 
-// Boss position (paired with the Necromancer gimmick): you are up a queen, but
-// every third turn it revives a fallen piece, so the edge erodes — mate fast.
+// Elite battles: full boards (so the game runs long) with only a slim, single-
+// minor advantage — hard, drawn-out fights that reward spending spells.
+const ELITE: Puzzle[] = [
+  { fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'The Champion of the Wood', flavor: 'A full enemy army, and you only a knight ahead. A long fight.' },
+  { fen: 'rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Warden of the Gate', flavor: 'Barely ahead against a complete host. Grind it down — or break it with magic.' },
+  { fen: 'rn1qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'The Iron Marshal', flavor: 'One bishop to the good, nothing else. Patience and spells win this.' },
+];
+
 const BOSS: Puzzle = {
   fen: 'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   title: 'The Necromancer',
@@ -139,35 +85,24 @@ function necromancerHook(engine: BattleEngine): void {
   }
 }
 
-const MAX_TIER = 5;
-
-// Difficulty tier for a node: battles ramp with map depth and act; elites and
-// the dedicated puzzle node are harder.
-export function tierForNode(node: MapNode, act: number): number {
-  const actBump = act - 1;
-  let tier: number;
-  if (node.type === 'elite') tier = 3 + Math.floor(node.row / 3) + actBump;
-  else if (node.type === 'puzzle') tier = 4 + actBump;
-  else tier = 1 + Math.floor(node.row / 2) + actBump;
-  return Math.max(1, Math.min(MAX_TIER, tier));
+// How tough a mate to demand at a node: ramps with map depth and act; the
+// dedicated puzzle node is always the hardest (mate in 3).
+function mateForNode(node: MapNode, act: number): number {
+  if (node.type === 'puzzle') return 3;
+  return Math.max(1, Math.min(3, 1 + Math.floor(node.row / 3) + (act - 1)));
 }
 
-// Pick a puzzle of the given tier that the player hasn't seen this run; fall
-// back to a wider/already-seen pool only if necessary.
-function pickPuzzle(tier: number, seed: string, used: Set<string>): Puzzle {
+function pickMate(mateIn: number, seed: string, used: Set<string>): MatePuzzle {
   const rng = rngFromSeed(seed);
-  // search the target tier, then expand outward, preferring unused puzzles
-  const order: number[] = [tier];
-  for (let d = 1; d < MAX_TIER; d++) {
-    if (tier - d >= 1) order.push(tier - d);
-    if (tier + d <= MAX_TIER) order.push(tier + d);
+  // try the requested difficulty, then adjacent ones, preferring unused
+  const order = [mateIn, mateIn - 1, mateIn + 1, mateIn - 2, mateIn + 2].filter(
+    (n) => n >= 1 && n <= 3
+  );
+  for (const n of order) {
+    const pool = shuffle(rng, MATE_PUZZLES.filter((p) => p.mateIn === n && !used.has(p.fen)));
+    if (pool.length) return pool[0];
   }
-  for (const t of order) {
-    const unused = shuffle(rng, TIERS[t].filter((p) => !used.has(p.fen)));
-    if (unused.length > 0) return unused[0];
-  }
-  // everything seen — just return something from the target tier
-  return shuffle(rng, TIERS[Math.max(1, Math.min(MAX_TIER, tier))])[0];
+  return shuffle(rng, MATE_PUZZLES.filter((p) => p.mateIn === mateIn))[0] ?? MATE_PUZZLES[0];
 }
 
 export function buildEncounter(
@@ -186,25 +121,22 @@ export function buildEncounter(
     };
   }
   if (node.type === 'elite') {
-    // Pick an unused elite if possible, else any.
     const rng = rngFromSeed(`${seed}:${node.id}:elite`);
     const pool = shuffle(rng, ELITE.filter((p) => !used.has(p.fen)));
     const puzzle = pool[0] ?? shuffle(rng, ELITE)[0];
-    return {
-      fen: puzzle.fen,
-      objective: { type: 'checkmate' },
-      title: puzzle.title,
-      flavor: puzzle.flavor,
-    };
+    return { fen: puzzle.fen, objective: { type: 'checkmate' }, title: puzzle.title, flavor: puzzle.flavor };
   }
-  const tier = tierForNode(node, act);
-  const puzzle = pickPuzzle(tier, `${seed}:${node.id}`, used);
+  // normal battle or puzzle node → a move-limited mate puzzle
+  const mateIn = mateForNode(node, act);
+  const p = pickMate(mateIn, `${seed}:${node.id}`, used);
   return {
-    fen: puzzle.fen,
-    objective: { type: 'checkmate' }, // every battle is won by checkmate
-    title: puzzle.title,
-    flavor: puzzle.flavor,
+    fen: p.fen,
+    objective: { type: 'mateInN', n: p.mateIn },
+    title: p.title,
+    flavor: p.flavor,
   };
 }
 
-export const ALL_PUZZLES: Puzzle[] = [...Object.values(TIERS).flat(), ...ELITE, BOSS];
+// Exposed for tests.
+export const ALL_MATE_PUZZLES = MATE_PUZZLES;
+export const ALL_PUZZLES: Puzzle[] = [...MATE_PUZZLES, ...ELITE, BOSS];

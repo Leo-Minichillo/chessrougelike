@@ -1,42 +1,54 @@
 import { describe, it, expect } from 'vitest';
 import { Chess } from 'chess.js';
 import { generateMap, findNode, availableNodes } from '../src/map/mapGen';
-import { buildEncounter, ALL_PUZZLES } from '../src/run/encounters';
+import { buildEncounter, ALL_PUZZLES, ALL_MATE_PUZZLES } from '../src/run/encounters';
 import { validateFen } from '../src/engine/fenUtils';
 import { materialBalance } from '../src/engine/objectives';
+import { canForceMateIn } from '../src/engine/mateSolver';
 import { chooseMove } from '../src/ai/minimax';
 import { eloToEngineConfig } from '../src/ai/eloMapping';
 import type { NodeType } from '../src/map/mapTypes';
 
-describe('curated puzzles', () => {
+describe('all positions are legal and playable', () => {
   for (const p of ALL_PUZZLES) {
-    it(`"${p.title}" is legal, White to move, not terminal, and winning`, () => {
+    it(`"${p.title}" is legal, White to move, not terminal, not in check`, () => {
       expect(validateFen(p.fen).ok).toBe(true);
       const c = new Chess(p.fen);
       expect(c.turn()).toBe('w'); // player is always White
       expect(c.isGameOver()).toBe(false);
-      expect(c.inCheck()).toBe(false); // player shouldn't start in check
-      // White must be decisively ahead (at least a rook, ~+3 floor for safety).
+      expect(c.inCheck()).toBe(false);
       expect(materialBalance(p.fen)).toBeGreaterThanOrEqual(3);
     });
   }
 });
 
-describe('encounter wiring', () => {
-  const types: NodeType[] = ['battle', 'elite', 'puzzle', 'boss'];
-  for (const type of types) {
-    it(`${type} uses a checkmate objective from a legal position`, () => {
-      const setup = buildEncounter(
-        { id: 'x', type, row: 3, col: 0, edges: [], visited: false },
-        'seed'
-      );
-      expect(setup.objective).toEqual({ type: 'checkmate' });
-      expect(validateFen(setup.fen).ok).toBe(true);
-      const c = new Chess(setup.fen);
-      expect(c.turn()).toBe('w');
-      expect(c.isGameOver()).toBe(false);
+describe('mate puzzles are sound forced mates', () => {
+  for (const p of ALL_MATE_PUZZLES) {
+    it(`"${p.title}" is a forced mate in ${p.mateIn}`, () => {
+      expect(canForceMateIn(p.fen, p.mateIn)).toBe(true);
+      // and not solvable faster (confirms the labelled number is correct)
+      if (p.mateIn > 1) expect(canForceMateIn(p.fen, p.mateIn - 1)).toBe(false);
     });
   }
+});
+
+describe('encounter wiring', () => {
+  it('battles and puzzle nodes use a move-limited mate objective', () => {
+    for (const type of ['battle', 'puzzle'] as NodeType[]) {
+      const setup = buildEncounter({ id: 'x', type, row: 3, col: 0, edges: [], visited: false }, 'seed');
+      expect(setup.objective.type).toBe('mateInN');
+      expect(validateFen(setup.fen).ok).toBe(true);
+      expect(new Chess(setup.fen).turn()).toBe('w');
+    }
+  });
+
+  it('elites and the boss are full-board checkmate battles', () => {
+    for (const type of ['elite', 'boss'] as NodeType[]) {
+      const setup = buildEncounter({ id: 'x', type, row: 3, col: 0, edges: [], visited: false }, 'seed');
+      expect(setup.objective).toEqual({ type: 'checkmate' });
+      expect(validateFen(setup.fen).ok).toBe(true);
+    }
+  });
 
   it('the boss carries its resurrect gimmick', () => {
     const setup = buildEncounter(

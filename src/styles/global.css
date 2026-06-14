@@ -154,6 +154,24 @@ button.btn.danger { border-color: rgba(224, 91, 91, 0.5); color: #ffd2d2; }
 /* ---- map ---- */
 .map-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
 .map-board { position: relative; overflow: hidden; }
+.map-graph { position: relative; }
+.map-edges {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 1; overflow: visible;
+}
+.map-edges .edge {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 10;
+}
+.map-edges .edge.active {
+  stroke: var(--accent-2);
+  stroke-width: 4;
+  stroke-dasharray: none;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 4px rgba(110, 168, 254, 0.5));
+}
 .map-rows { position: relative; z-index: 2; }
 .map-row { display: flex; justify-content: center; gap: 30px; margin: 16px 0; }
 .map-node {
