@@ -66,6 +66,24 @@ describe('Class-2 relics produce legal boards', () => {
   });
 });
 
+describe('king capture is an instant win', () => {
+  it('Time Stutter into a check wins immediately', () => {
+    // White Q can check the black king; with an extra move we take the king.
+    const e = withSpell('7k/8/8/8/8/8/8/Q6K w - - 0 1', 'time-stutter');
+    e.activateRelic('time-stutter');
+    e.applyPlayerMove({ from: 'a1', to: 'a8' }); // Qa8+ — check, then bonus move
+    expect(e.phase).toBe('won');
+  });
+
+  it('a spell that exposes the king (Banish a blocker) wins immediately', () => {
+    // Removing the a7 pawn opens the a-file: the rook attacks the black king
+    // while it is still White's move -> king capture.
+    const e = withSpell('k7/p7/8/8/8/8/8/R6K w - - 0 1', 'banish');
+    e.activateRelic('banish', 'a7');
+    expect(e.phase).toBe('won');
+  });
+});
+
 describe('Tithe + Vampiric Edge passives', () => {
   it('Tithe grants gold on a capture', () => {
     // white pawn d4 can take black pawn e5

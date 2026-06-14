@@ -92,6 +92,7 @@ interface GameStore {
   choosePromotion: (piece: 'q' | 'r' | 'b' | 'n') => void;
   activateRelic: (relicId: string) => void;
   cancelTargeting: () => void;
+  cancelSelection: () => void;
   claimReward: (option: RewardOption | null) => void;
   buyItem: (item: ShopItem) => void;
   buyHeal: () => void;
@@ -394,6 +395,11 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     cancelTargeting() {
       set({ targeting: null });
+    },
+
+    // Right-click / Esc: drop any armed spell and any selected piece.
+    cancelSelection() {
+      set({ targeting: null, selected: null, legalTargets: [] });
     },
 
     claimReward(option) {

@@ -47,6 +47,10 @@ export class BattleEngine implements BattleCtx {
   private extraMoves = 0;
   private frozen = new Set<Square>();
   private flags = new Set<string>();
+  // Set when the player engineers a position where they would capture the enemy
+  // king (e.g. give check then take an extra move). This is an instant win and
+  // sidesteps chess.js rejecting the (technically illegal) king-en-prise FEN.
+  kingCaptured = false;
   // The most recent move (either side), for board highlighting.
   lastMove: { from: Square; to: Square } | null = null;
   // The most recently captured AI piece, for the Necromancer boss gimmick.
@@ -78,6 +82,16 @@ export class BattleEngine implements BattleCtx {
   }
 
   setFen(fen: string): boolean {
+    // King-capture win: a spell left the enemy king in check while it is still
+    // our move (e.g. Banish the only defender of a pinned king). chess.js would
+    // reject this as illegal, so instead we declare victory and store the
+    // position with the AI to move (which renders fine, king shown in check).
+    if (this.aiKingInCheck(fen)) {
+      this.chess.load(withActiveColor(fen, AI_COLOR));
+      this.kingCaptured = true;
+      this.log('The enemy king stands exposed — you capture it!');
+      return true;
+    }
     const v = validateFen(fen);
     if (!v.ok) {
       this.log(`(effect fizzled: ${v.reason})`);
@@ -85,6 +99,17 @@ export class BattleEngine implements BattleCtx {
     }
     this.chess.load(fen);
     return true;
+  }
+
+  // Would the AI king be capturable in this (player-to-move) position? True if
+  // the AI king is in check — restamp to the AI side (legal even when in check)
+  // and ask chess.js.
+  private aiKingInCheck(playerToMoveFen: string): boolean {
+    try {
+      return new Chess(withActiveColor(playerToMoveFen, AI_COLOR)).inCheck();
+    } catch {
+      return false;
+    }
   }
 
   grantExtraMove(): void {
@@ -204,12 +229,19 @@ export class BattleEngine implements BattleCtx {
 
     this.fullMovesPlayed += 1;
 
-    // Extra-move bookkeeping: chess.js already flipped side-to-move to black; if
-    // the player has a queued extra move, re-stamp it back to white.
+    // Extra-move bookkeeping. chess.js already flipped side-to-move to the AI.
     if (this.extraMoves > 0) {
       this.extraMoves -= 1;
-      this.chess.load(withActiveColor(this.chess.fen(), PLAYER_COLOR));
-      this.log('Time Stutter: take another move!');
+      if (this.chess.inCheck()) {
+        // The move gave check and we get to move again — we simply take the
+        // king. Instant win (leave the board as-is: AI to move, king in check).
+        this.kingCaptured = true;
+        this.log('You seize the moment and capture the enemy king!');
+      } else {
+        // Re-stamp side-to-move back to the player for the bonus move.
+        this.chess.load(withActiveColor(this.chess.fen(), PLAYER_COLOR));
+        this.log('Time Stutter: take another move!');
+      }
     }
 
     this.refreshResult();
@@ -332,6 +364,10 @@ export class BattleEngine implements BattleCtx {
 
   // Recompute phase from the objective result + whose turn it is.
   private refreshResult(): void {
+    if (this.kingCaptured) {
+      this.phase = 'won';
+      return;
+    }
     const res = this.result();
     if (res === 'win') {
       this.phase = 'won';

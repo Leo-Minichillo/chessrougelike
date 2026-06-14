@@ -57,7 +57,8 @@ export function eloToEngineConfig(effectiveElo: number): EngineConfig {
 export function nodeEloBonus(node: Pick<MapNode, 'type' | 'row'>): number {
   switch (node.type) {
     case 'elite':
-      return 150 + node.row * 10;
+      // Elites are a real wall: a big jump over surrounding battles.
+      return 280 + node.row * 20;
     case 'boss':
       return 250;
     case 'battle':

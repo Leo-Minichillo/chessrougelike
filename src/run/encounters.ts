@@ -88,6 +88,27 @@ const TIERS: Record<number, Puzzle[]> = {
   ],
 };
 
+// Elite battles: full boards (so the game runs long) with only a slim, single-
+// minor advantage (so they're genuinely hard and reward spending spells). Paired
+// with a big Elo bump in eloMapping.
+const ELITE: Puzzle[] = [
+  {
+    fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    title: 'The Champion of the Wood',
+    flavor: 'A full enemy army, and you only a knight ahead. This will be a long fight.',
+  },
+  {
+    fen: 'rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    title: 'Warden of the Gate',
+    flavor: 'Barely ahead against a complete host. Grind it down — or break it with magic.',
+  },
+  {
+    fen: 'rn1qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    title: 'The Iron Marshal',
+    flavor: 'One bishop to the good, nothing else. Patience and spells win this.',
+  },
+];
+
 // Boss position (paired with the Necromancer gimmick): you are up a queen, but
 // every third turn it revives a fallen piece, so the edge erodes — mate fast.
 const BOSS: Puzzle = {
@@ -164,6 +185,18 @@ export function buildEncounter(
       bossHook: necromancerHook,
     };
   }
+  if (node.type === 'elite') {
+    // Pick an unused elite if possible, else any.
+    const rng = rngFromSeed(`${seed}:${node.id}:elite`);
+    const pool = shuffle(rng, ELITE.filter((p) => !used.has(p.fen)));
+    const puzzle = pool[0] ?? shuffle(rng, ELITE)[0];
+    return {
+      fen: puzzle.fen,
+      objective: { type: 'checkmate' },
+      title: puzzle.title,
+      flavor: puzzle.flavor,
+    };
+  }
   const tier = tierForNode(node, act);
   const puzzle = pickPuzzle(tier, `${seed}:${node.id}`, used);
   return {
@@ -174,4 +207,4 @@ export function buildEncounter(
   };
 }
 
-export const ALL_PUZZLES: Puzzle[] = [...Object.values(TIERS).flat(), BOSS];
+export const ALL_PUZZLES: Puzzle[] = [...Object.values(TIERS).flat(), ...ELITE, BOSS];

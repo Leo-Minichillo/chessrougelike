@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import type { Square } from '../../engine/types';
 
@@ -20,6 +20,15 @@ interface BoardProps {
   checkedKing: Square | null;
   interactive: boolean;
   onSquareClick: (sq: Square) => void;
+  onCancel: () => void;
+}
+
+interface DragState {
+  from: Square;
+  color: 'w' | 'b';
+  type: string;
+  vx: number; // viewBox coords of the cursor
+  vy: number;
 }
 
 export function Board(props: BoardProps) {
@@ -33,17 +42,85 @@ export function Board(props: BoardProps) {
     checkedKing,
     interactive,
     onSquareClick,
+    onCancel,
   } = props;
 
   const board = useMemo(() => new Chess(fen).board(), [fen]);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
+
   const legal = new Set(legalTargets);
   const targets = new Set(targetingTargets);
   const frozenSet = new Set(frozen);
   const lastSet = new Set(lastMove ? [lastMove.from, lastMove.to] : []);
+  const targeting = targetingTargets.length > 0;
+
+  // Map a client point to a board square (and to viewBox coords).
+  function locate(clientX: number, clientY: number) {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return { sq: null as Square | null, vx: 0, vy: 0 };
+    const fx = Math.floor(((clientX - rect.left) / rect.width) * 8);
+    const fy = Math.floor(((clientY - rect.top) / rect.height) * 8);
+    const vx = ((clientX - rect.left) / rect.width) * 800;
+    const vy = ((clientY - rect.top) / rect.height) * 800;
+    const sq =
+      fx >= 0 && fx < 8 && fy >= 0 && fy < 8 ? (`${FILES[fx]}${8 - fy}` as Square) : null;
+    return { sq, vx, vy };
+  }
+
+  function pieceAt(sq: Square) {
+    const f = FILES.indexOf(sq[0]);
+    const r = 8 - parseInt(sq[1], 10);
+    return board[r][f];
+  }
+
+  function onPointerDown(e: React.PointerEvent, sq: Square) {
+    if (!interactive) return;
+    const p = pieceAt(sq);
+    // Start a drag only when grabbing your own piece outside targeting mode.
+    if (!targeting && p && p.color === 'w') {
+      onSquareClick(sq); // select it (shows legal targets)
+      const { vx, vy } = locate(e.clientX, e.clientY);
+      svgRef.current?.setPointerCapture(e.pointerId);
+      setDrag({ from: sq, color: p.color, type: p.type, vx, vy });
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!drag) return;
+    const { vx, vy } = locate(e.clientX, e.clientY);
+    setDrag({ ...drag, vx, vy });
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    const { sq } = locate(e.clientX, e.clientY);
+    if (drag) {
+      // Dropping on a different square attempts the move; same square = a click.
+      if (sq && sq !== drag.from) onSquareClick(sq);
+      setDrag(null);
+    } else if (sq && interactive) {
+      // Plain click (target square, capture, or spell target).
+      onSquareClick(sq);
+    }
+  }
 
   return (
     <div className="board-frame">
-      <svg className="board-svg" viewBox="0 0 800 800" role="grid" aria-label="chess board">
+      <svg
+        ref={svgRef}
+        className="board-svg"
+        viewBox="0 0 800 800"
+        role="grid"
+        aria-label="chess board"
+        style={{ touchAction: 'none' }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setDrag(null);
+          onCancel();
+        }}
+      >
         <defs>
           <linearGradient id="lightSq" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#f3e2c0" />
@@ -70,11 +147,12 @@ export function Board(props: BoardProps) {
             const x = f * CELL;
             const y = r * CELL;
             const isLastMove = lastSet.has(sq);
+            const beingDragged = drag?.from === sq;
             return (
               <g
                 key={sq}
-                onClick={() => interactive && onSquareClick(sq)}
-                style={{ cursor: interactive ? 'pointer' : 'default' }}
+                onPointerDown={(e) => onPointerDown(e, sq)}
+                style={{ cursor: interactive ? (drag ? 'grabbing' : 'pointer') : 'default' }}
               >
                 <rect x={x} y={y} width={CELL} height={CELL} fill={isLight ? 'url(#lightSq)' : 'url(#darkSq)'} />
 
@@ -117,7 +195,6 @@ export function Board(props: BoardProps) {
                   />
                 )}
 
-                {/* coordinate labels along the board edge (lichess style) */}
                 {f === 0 && (
                   <text
                     x={x + 5}
@@ -143,7 +220,7 @@ export function Board(props: BoardProps) {
                   </text>
                 )}
 
-                {piece && (
+                {piece && !beingDragged && (
                   <image
                     href={pieceHref(piece.color, piece.type)}
                     x={x + 7}
@@ -163,6 +240,19 @@ export function Board(props: BoardProps) {
               </g>
             );
           })
+        )}
+
+        {/* the piece currently being dragged, following the cursor */}
+        {drag && (
+          <image
+            href={pieceHref(drag.color, drag.type)}
+            x={drag.vx - 46}
+            y={drag.vy - 46}
+            width={92}
+            height={92}
+            filter="url(#pieceShadow)"
+            style={{ pointerEvents: 'none' }}
+          />
         )}
       </svg>
     </div>

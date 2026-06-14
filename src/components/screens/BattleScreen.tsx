@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useGameStore } from '../../state/useGameStore';
 import { Board } from '../board/Board';
 
@@ -10,7 +11,17 @@ export function BattleScreen() {
   const clickSquare = useGameStore((s) => s.clickSquare);
   const activateRelic = useGameStore((s) => s.activateRelic);
   const cancelTargeting = useGameStore((s) => s.cancelTargeting);
+  const cancelSelection = useGameStore((s) => s.cancelSelection);
   const choosePromotion = useGameStore((s) => s.choosePromotion);
+
+  // Esc also cancels an armed spell / selected piece (alongside right-click).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cancelSelection]);
 
   if (!battle) return null;
   const interactive = battle.phase === 'playerInput';
@@ -39,6 +50,7 @@ export function BattleScreen() {
           checkedKing={battle.checkedKing}
           interactive={interactive && !pendingPromotion}
           onSquareClick={clickSquare}
+          onCancel={cancelSelection}
         />
 
         <div className="material">
@@ -55,7 +67,7 @@ export function BattleScreen() {
         {battle.phase === 'aiThinking' && <div className="thinking">The enemy is thinking…</div>}
         {targeting && (
           <div className="targeting-hint">
-            Choose a target square — or{' '}
+            Choose a target square — right-click (or Esc) to{' '}
             <button className="btn" style={{ padding: '2px 8px' }} onClick={cancelTargeting}>
               cancel
             </button>
