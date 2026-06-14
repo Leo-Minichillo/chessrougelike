@@ -4,15 +4,22 @@ export function RelicCard({
   option,
   cost,
   disabled,
+  boon,
   onClick,
 }: {
   option: RewardOption;
   cost?: number;
   disabled?: boolean;
+  boon?: boolean; // starting boon: spells are "once per battle, permanent"
   onClick: () => void;
 }) {
   const { def, kind } = option;
   const isSpell = kind === 'spell';
+  const kindLabel = isSpell
+    ? boon
+      ? 'Spell · once per battle (permanent)'
+      : `Spell · +${def.charges ?? 1} charges`
+    : 'Relic · passive';
   return (
     <div
       className={`relic-card rarity-${def.rarity}`}
@@ -21,9 +28,7 @@ export function RelicCard({
     >
       <div className="rc-ico">{def.icon}</div>
       <div className="rc-name">{def.name}</div>
-      <div className={`rc-kind ${isSpell ? 'active' : 'passive'}`}>
-        {isSpell ? `Spell · +${def.charges ?? 1} charges` : 'Relic · passive'}
-      </div>
+      <div className={`rc-kind ${isSpell ? 'active' : 'passive'}`}>{kindLabel}</div>
       <div className="rc-desc">{def.description}</div>
       {cost !== undefined && <div className="rc-cost">🪙 {cost}</div>}
     </div>

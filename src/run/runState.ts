@@ -11,10 +11,13 @@ export interface OwnedRelic {
   defId: string;
 }
 
-// An active spell with run-persistent charges.
+// An active spell with run-persistent charges. A `perBattle` spell instead
+// refreshes to 1 charge at the start of every battle and never depletes — that
+// is the "once per battle, doesn't go away" starting boon.
 export interface OwnedSpell {
   defId: string;
   charges: number;
+  perBattle?: boolean;
 }
 
 export interface RunState {
@@ -47,11 +50,9 @@ export function createRunState(
     gold: STARTING_GOLD,
     lives: STARTING_LIVES,
     maxLives: STARTING_LIVES,
+    // You begin with neither — your first boon is chosen on the boon screen.
     relics: [],
-    spells: [
-      // Everyone starts with the signature spell, charged for the whole run.
-      { defId: 'time-stutter', charges: 3 },
-    ],
+    spells: [],
     map,
     currentNodeId: null,
     act: 1,
@@ -60,9 +61,19 @@ export function createRunState(
   };
 }
 
-// Add a spell to the run, stacking charges if already owned.
-export function grantSpell(run: RunState, defId: string, charges: number): void {
+// Add a spell to the run, stacking charges if already owned. A perBattle spell
+// (the starting boon) refreshes each battle instead of depleting.
+export function grantSpell(
+  run: RunState,
+  defId: string,
+  charges: number,
+  perBattle = false
+): void {
   const existing = run.spells.find((s) => s.defId === defId);
-  if (existing) existing.charges += charges;
-  else run.spells.push({ defId, charges });
+  if (existing) {
+    existing.charges += charges;
+    if (perBattle) existing.perBattle = true;
+  } else {
+    run.spells.push({ defId, charges, perBattle: perBattle || undefined });
+  }
 }

@@ -49,6 +49,75 @@ export const RELICS: RelicDef[] = [
     // spell charges persist across battles rather than refilling each fight.
   },
   {
+    id: 'bloodlust',
+    name: 'Bloodlust',
+    kind: 'passive',
+    rarity: 'uncommon',
+    icon: '🩸',
+    cost: 70,
+    description: 'Every 3rd piece you capture in a battle grants you an extra move.',
+    onPlayerMove(ctx, _move, captured) {
+      if (captured && ctx.tick('bloodlust') % 3 === 0) {
+        ctx.grantExtraMove();
+        ctx.log('Bloodlust: the slaughter fuels you — move again!');
+      }
+    },
+  },
+  {
+    id: 'momentum',
+    name: 'Momentum',
+    kind: 'passive',
+    rarity: 'uncommon',
+    icon: '🌀',
+    cost: 65,
+    description: 'Every 4th move you make grants an extra move.',
+    onPlayerMove(ctx) {
+      if (ctx.tick('momentum') % 4 === 0) {
+        ctx.grantExtraMove();
+        ctx.log('Momentum: you flow into another move!');
+      }
+    },
+  },
+  {
+    id: 'saboteur',
+    name: 'Saboteur',
+    kind: 'passive',
+    rarity: 'rare',
+    icon: '🕷️',
+    cost: 85,
+    description: 'At the start of each battle, freeze an enemy piece (its queen if it has one).',
+    onBattleStart(ctx) {
+      const enemies = ctx.enemyPieces().filter((p) => p.type !== 'k');
+      if (enemies.length === 0) return;
+      const target = enemies.find((p) => p.type === 'q') ?? enemies[0];
+      ctx.freeze(target.square);
+      ctx.log(`Saboteur: froze the enemy ${target.type.toUpperCase()} on ${target.square}.`);
+    },
+  },
+  {
+    id: 'plunder',
+    name: 'Plunder',
+    kind: 'passive',
+    rarity: 'common',
+    icon: '💰',
+    cost: 45,
+    description: 'Gain 15 bonus gold every battle you win.',
+    onBattleStart(ctx) {
+      // goldEarned is only banked on victory, so this effectively rewards wins.
+      ctx.addGold(15);
+    },
+  },
+  {
+    id: 'quartz-heart',
+    name: 'Quartz Heart',
+    kind: 'passive',
+    rarity: 'rare',
+    icon: '💎',
+    cost: 90,
+    description: 'Gain +1 maximum heart (and heal 1) when acquired.',
+    // Applied at the run level when picked up (see useGameStore.grantOption).
+  },
+  {
     id: 'vampiric-edge',
     name: 'Vampiric Edge',
     kind: 'passive',

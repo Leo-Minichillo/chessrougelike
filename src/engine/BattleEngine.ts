@@ -47,6 +47,8 @@ export class BattleEngine implements BattleCtx {
   private extraMoves = 0;
   private frozen = new Set<Square>();
   private flags = new Set<string>();
+  // At most one spell per turn: set when a spell is cast, cleared after a move.
+  private spellCastThisTurn = false;
   // Set when the player engineers a position where they would capture the enemy
   // king (e.g. give check then take an extra move). This is an instant win and
   // sidesteps chess.js rejecting the (technically illegal) king-en-prise FEN.
@@ -132,6 +134,13 @@ export class BattleEngine implements BattleCtx {
     if (this.flags.has(key)) return false;
     this.flags.add(key);
     return true;
+  }
+
+  private counters = new Map<string, number>();
+  tick(key: string): number {
+    const n = (this.counters.get(key) ?? 0) + 1;
+    this.counters.set(key, n);
+    return n;
   }
 
   enemyPieces(): { square: Square; type: string }[] {
@@ -228,6 +237,7 @@ export class BattleEngine implements BattleCtx {
     for (const r of this.passives) r.onPlayerMove?.(this, move, captured);
 
     this.fullMovesPlayed += 1;
+    this.spellCastThisTurn = false; // a new turn begins — spells unlocked again
 
     // Extra-move bookkeeping. chess.js already flipped side-to-move to the AI.
     if (this.extraMoves > 0) {
@@ -323,12 +333,19 @@ export class BattleEngine implements BattleCtx {
     this.version++;
   }
 
+  // Whether a spell may be cast right now (one per turn).
+  canCastSpell(): boolean {
+    return this.phase === 'playerInput' && !this.spellCastThisTurn;
+  }
+
   // Cast an owned spell. Returns false (and consumes nothing) if it can't fire.
-  // Target-requiring spells are validated by the caller/store.
+  // Target-requiring spells are validated by the caller/store. Only one spell
+  // may be cast per turn.
   activateRelic(defId: string, target?: Square): boolean {
-    if (this.phase !== 'playerInput') return false;
+    if (this.phase !== 'playerInput' || this.spellCastThisTurn) return false;
     const s = this.spells.find((x) => x.def.id === defId);
     if (!s || s.charges <= 0) return false;
+    this.spellCastThisTurn = true;
     const before = this.version;
     s.def.activate?.(this, target);
     s.charges -= 1;

@@ -53,9 +53,10 @@ describe('encounter escalation', () => {
     );
   });
 
-  it('applies the humanize offset to base elo', () => {
-    const eff = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
-    expect(eff).toBe(1500 + ELO_HUMANIZE_OFFSET);
+  it('applies the humanize offset and node bonus to base elo', () => {
+    const node = { type: 'battle' as const, row: 0 };
+    const eff = computeEncounterElo({ baseElo: 1500, act: 1 }, node);
+    expect(eff).toBe(1500 + nodeEloBonus(node) + ELO_HUMANIZE_OFFSET);
   });
 
   it('ramps battle difficulty with map depth', () => {

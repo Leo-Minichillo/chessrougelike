@@ -58,12 +58,17 @@ export function nodeEloBonus(node: Pick<MapNode, 'type' | 'row'>): number {
   switch (node.type) {
     case 'elite':
       // Elites are a real wall: a big jump over surrounding battles.
-      return 280 + node.row * 20;
+      return 480 + node.row * 20;
     case 'boss':
-      return 250;
+      return 450;
+    case 'puzzle':
+      // The AI should defend a puzzle well so "mate in N" really means N.
+      return 280 + node.row * 10;
     case 'battle':
     default:
-      return clamp(node.row * 15, 0, 105);
+      // Battles are deliberately harder than the player's own rating because
+      // they have spells to lean on.
+      return 320 + node.row * 15;
   }
 }
 

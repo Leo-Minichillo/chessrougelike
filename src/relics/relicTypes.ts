@@ -30,6 +30,10 @@ export interface BattleCtx {
   // once-per-battle latch: returns true the FIRST time a key is seen, then
   // false forever after (used by Vampiric Edge and other single-use passives)
   once(key: string): boolean;
+
+  // per-battle counter: increments and returns the new count for a key
+  // (used by relics that fire every Nth capture/move)
+  tick(key: string): number;
 }
 
 export type RelicKind = 'passive' | 'active' | 'upgrade';

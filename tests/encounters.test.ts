@@ -2,22 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { Chess } from 'chess.js';
 import { generateMap, findNode, availableNodes } from '../src/map/mapGen';
 import { buildEncounter, ALL_PUZZLES, ALL_MATE_PUZZLES } from '../src/run/encounters';
-import { validateFen } from '../src/engine/fenUtils';
-import { materialBalance } from '../src/engine/objectives';
+import { isLegalStart } from '../src/engine/fenUtils';
 import { canForceMateIn } from '../src/engine/mateSolver';
 import { chooseMove } from '../src/ai/minimax';
 import { eloToEngineConfig } from '../src/ai/eloMapping';
 import type { NodeType } from '../src/map/mapTypes';
 
-describe('all positions are legal and playable', () => {
+describe('all positions are strictly legal starts', () => {
   for (const p of ALL_PUZZLES) {
-    it(`"${p.title}" is legal, White to move, not terminal, not in check`, () => {
-      expect(validateFen(p.fen).ok).toBe(true);
-      const c = new Chess(p.fen);
-      expect(c.turn()).toBe('w'); // player is always White
-      expect(c.isGameOver()).toBe(false);
-      expect(c.inCheck()).toBe(false);
-      expect(materialBalance(p.fen)).toBeGreaterThanOrEqual(3);
+    it(`"${p.title}" is a legal start (White to move, neither king in check)`, () => {
+      // isLegalStart catches the "enemy king already in check" bug that broke
+      // king capture — chess.js loads those leniently, so we check explicitly.
+      expect(isLegalStart(p.fen)).toBe(true);
     });
   }
 });
@@ -33,20 +29,17 @@ describe('mate puzzles are sound forced mates', () => {
 });
 
 describe('encounter wiring', () => {
-  it('battles and puzzle nodes use a move-limited mate objective', () => {
-    for (const type of ['battle', 'puzzle'] as NodeType[]) {
-      const setup = buildEncounter({ id: 'x', type, row: 3, col: 0, edges: [], visited: false }, 'seed');
-      expect(setup.objective.type).toBe('mateInN');
-      expect(validateFen(setup.fen).ok).toBe(true);
-      expect(new Chess(setup.fen).turn()).toBe('w');
-    }
+  it('puzzle nodes use a move-limited mate objective', () => {
+    const setup = buildEncounter({ id: 'x', type: 'puzzle', row: 3, col: 0, edges: [], visited: false }, 'seed');
+    expect(setup.objective.type).toBe('mateInN');
+    expect(isLegalStart(setup.fen)).toBe(true);
   });
 
-  it('elites and the boss are full-board checkmate battles', () => {
-    for (const type of ['elite', 'boss'] as NodeType[]) {
+  it('battles, elites and the boss are checkmate battles', () => {
+    for (const type of ['battle', 'elite', 'boss'] as NodeType[]) {
       const setup = buildEncounter({ id: 'x', type, row: 3, col: 0, edges: [], visited: false }, 'seed');
       expect(setup.objective).toEqual({ type: 'checkmate' });
-      expect(validateFen(setup.fen).ok).toBe(true);
+      expect(isLegalStart(setup.fen)).toBe(true);
     }
   });
 

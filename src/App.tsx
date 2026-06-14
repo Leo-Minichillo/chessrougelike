@@ -1,5 +1,6 @@
 import { useGameStore } from './state/useGameStore';
 import { EloEntryScreen } from './components/screens/EloEntryScreen';
+import { BoonScreen } from './components/screens/BoonScreen';
 import { MapScreen } from './components/screens/MapScreen';
 import { BattleScreen } from './components/screens/BattleScreen';
 import { RewardScreen } from './components/screens/RewardScreen';
@@ -19,6 +20,7 @@ export function App() {
       </header>
       <main className="app-main" key={phase}>
         {phase === 'eloEntry' && <EloEntryScreen />}
+        {phase === 'boon' && <BoonScreen />}
         {phase === 'map' && <MapScreen />}
         {phase === 'battle' && <BattleScreen />}
         {phase === 'reward' && <RewardScreen />}

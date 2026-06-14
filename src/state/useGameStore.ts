@@ -21,6 +21,7 @@ import {
   nodeGoldReward,
   rollReward,
   rollShop,
+  rollBoons,
   HEAL_COST,
   RECHARGE_COST,
   type ShopItem,
@@ -30,6 +31,7 @@ import { rollEvent, type GameEvent } from '../run/events';
 
 export type GamePhase =
   | 'eloEntry'
+  | 'boon'
   | 'map'
   | 'battle'
   | 'reward'
@@ -81,6 +83,7 @@ interface GameStore {
 
   // transient node screens
   rewardOptions: RewardOption[];
+  boonOptions: RewardOption[];
   shop: ShopState | null;
   event: GameEvent | null;
   eventResult: string | null;
@@ -89,6 +92,7 @@ interface GameStore {
 
   // actions
   startRun: (baseElo: number, seed?: string) => void;
+  chooseBoon: (option: RewardOption) => void;
   chooseNode: (nodeId: string) => void;
   clickSquare: (sq: Square) => void;
   choosePromotion: (piece: 'q' | 'r' | 'b' | 'n') => void;
@@ -127,7 +131,11 @@ function ownedPassives(run: RunState): RelicDef[] {
   return run.relics.map((r) => getRelic(r.defId));
 }
 function ownedSpells(run: RunState): { def: RelicDef; charges: number }[] {
-  return run.spells.map((s) => ({ def: getRelic(s.defId), charges: s.charges }));
+  // perBattle spells refresh to 1 charge each battle; others use their pool.
+  return run.spells.map((s) => ({
+    def: getRelic(s.defId),
+    charges: s.perBattle ? 1 : s.charges,
+  }));
 }
 
 // Build the UI projection from the live engine.
@@ -148,7 +156,7 @@ function projectBattle(node: MapNode, title: string, flavor: string): BattleView
     spells: e.spells.map((s) => ({
       def: s.def,
       charges: s.charges,
-      usable: s.charges > 0 && e.phase === 'playerInput',
+      usable: s.charges > 0 && e.canCastSpell(),
     })),
     title,
     flavor,
@@ -194,6 +202,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   function persistSpells(run: RunState, won: boolean) {
     const remaining = engineRef!.spellCharges();
     for (const s of run.spells) {
+      if (s.perBattle) continue; // refreshes next battle; never depletes
       const found = remaining.find((r) => r.defId === s.defId);
       if (found) s.charges = found.charges;
     }
@@ -290,6 +299,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     targeting: null,
     pendingPromotion: null,
     rewardOptions: [],
+    boonOptions: [],
     shop: null,
     event: null,
     eventResult: null,
@@ -303,7 +313,20 @@ export const useGameStore = create<GameStore>((set, get) => {
       engineRef = null;
       currentNode = null;
       saveRun(run);
-      set({ phase: 'map', run, battle: null, toast: null });
+      // First, choose a starting boon.
+      set({ phase: 'boon', run, battle: null, toast: null, boonOptions: rollBoons(realSeed) });
+    },
+
+    chooseBoon(option) {
+      const run = get().run!;
+      if (option.kind === 'spell') {
+        // a "once per battle, never depletes" spell
+        grantSpell(run, option.def.id, 1, true);
+      } else {
+        grantOption(run, option);
+      }
+      saveRun(run);
+      set({ phase: 'map', boonOptions: [], run: { ...run } });
     },
 
     chooseNode(nodeId) {
@@ -383,7 +406,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     activateRelic(relicId) {
       const e = engineRef;
-      if (!e || e.phase !== 'playerInput') return;
+      if (!e || !e.canCastSpell()) return;
       const def = getRelic(relicId);
       if (def.kind !== 'active' || e.chargesFor(relicId) <= 0) return;
       if (!def.requiresTarget) {
@@ -549,6 +572,11 @@ function grantOption(run: RunState, option: RewardOption): void {
   if (option.kind === 'relic') {
     if (!run.relics.some((r) => r.defId === option.def.id)) {
       run.relics.push({ defId: option.def.id });
+      // Quartz Heart's effect is a one-time stat boost on pickup.
+      if (option.def.id === 'quartz-heart') {
+        run.maxLives += 1;
+        run.lives = Math.min(run.lives + 1, run.maxLives);
+      }
     }
   } else {
     grantSpell(run, option.def.id, option.def.charges ?? 1);

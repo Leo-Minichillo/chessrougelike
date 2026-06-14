@@ -1,4 +1,4 @@
-import { PASSIVE_RELICS, SPELLS } from '../relics/relicDefs';
+import { PASSIVE_RELICS, SPELLS, getRelic } from '../relics/relicDefs';
 import type { RelicDef } from '../relics/relicTypes';
 import type { RunState } from './runState';
 import { rngFromSeed, shuffle, type Rng } from '../util/rng';
@@ -36,10 +36,16 @@ function ownedRelicIds(run: RunState): Set<string> {
 // (spells can always be offered to top up charges).
 function offerPool(run: RunState): RewardOption[] {
   const ownedRelics = ownedRelicIds(run);
+  // Don't offer a spell the player already holds as a permanent per-battle boon
+  // (buying charges for it would be wasted — it refreshes for free).
+  const permanentSpells = new Set(run.spells.filter((s) => s.perBattle).map((s) => s.defId));
   const relics: RewardOption[] = PASSIVE_RELICS.filter((r) => !ownedRelics.has(r.id)).map(
     (def) => ({ kind: 'relic', def })
   );
-  const spells: RewardOption[] = SPELLS.map((def) => ({ kind: 'spell', def }));
+  const spells: RewardOption[] = SPELLS.filter((d) => !permanentSpells.has(d.id)).map((def) => ({
+    kind: 'spell',
+    def,
+  }));
   return [...relics, ...spells];
 }
 
@@ -55,4 +61,19 @@ export function rollShop(run: RunState, nodeId: string): ShopItem[] {
   return shuffle(rng, offerPool(run))
     .slice(0, 4)
     .map((o) => ({ ...o, cost: o.def.cost ?? 50 }));
+}
+
+// The starting boon: 3 choices, each a passive relic OR a "once per battle"
+// spell that never depletes. Picked on the boon screen at run start.
+const BOON_SPELL_IDS = ['time-stutter', 'frostbite', 'conscript', 'banish'];
+const BOON_RELIC_IDS = ['bloodlust', 'momentum', 'plunder', 'tithe'];
+
+export function rollBoons(seed: string): RewardOption[] {
+  const rng = rngFromSeed(`${seed}:boons`);
+  const spells: RewardOption[] = BOON_SPELL_IDS.map((id) => ({ kind: 'spell', def: getRelic(id) }));
+  const relics: RewardOption[] = BOON_RELIC_IDS.map((id) => ({ kind: 'relic', def: getRelic(id) }));
+  // offer at least one spell and one relic, plus a third wildcard
+  const s = shuffle(rng, spells);
+  const r = shuffle(rng, relics);
+  return shuffle(rng, [s[0], r[0], rng() < 0.5 ? s[1] : r[1]]);
 }

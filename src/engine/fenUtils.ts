@@ -49,6 +49,28 @@ export function activeColor(fen: string): Color {
   return fen.split(' ')[1] as Color;
 }
 
+// A *strictly* legal starting position: loads, White to move, the game isn't
+// over, and NEITHER king is in check. chess.js loads "side-not-to-move in
+// check" positions leniently, so we explicitly reject them — those are the
+// illegal puzzle starts that broke on king capture.
+export function isLegalStart(fen: string): boolean {
+  let c: Chess;
+  try {
+    c = new Chess(fen);
+  } catch {
+    return false;
+  }
+  if (c.turn() !== 'w' || c.isGameOver() || c.inCheck()) return false;
+  const parts = fen.split(' ');
+  parts[1] = 'b';
+  parts[3] = '-';
+  try {
+    return !new Chess(parts.join(' ')).inCheck();
+  } catch {
+    return false;
+  }
+}
+
 // Re-stamps the side-to-move in a FEN without otherwise touching the board.
 // This is how "extra move" powers keep it the player's turn, and how we hand a
 // position to the AI as though it were the AI's move.

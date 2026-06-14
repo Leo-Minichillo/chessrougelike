@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../state/useGameStore';
-import { availableNodes } from '../../map/mapGen';
-import { NODE_ICON, NODE_LABEL, type MapNode } from '../../map/mapTypes';
+import { availableNodes, findNode } from '../../map/mapGen';
+import { NODE_ICON, NODE_LABEL, type MapGraph, type MapNode } from '../../map/mapTypes';
 import { getRelic } from '../../relics/relicDefs';
 import { MAX_ACTS } from '../../run/runState';
 
@@ -26,6 +26,9 @@ export function MapScreen() {
   const reachable = run
     ? new Set(availableNodes(run.map, run.currentNodeId).map((n) => n.id))
     : new Set<string>();
+  // Nodes whose outgoing edges we draw: only the routes still ahead of you from
+  // your current position (not every edge in the whole map).
+  const forwardSources = run ? forwardSourceNodes(run.map, run.currentNodeId) : new Set<string>();
 
   // Measure node centers and build connector lines between each node and its
   // edge targets. Recomputed on layout changes and window resize.
@@ -38,6 +41,7 @@ export function MapScreen() {
       const out: Line[] = [];
       for (const row of run.map.rows) {
         for (const node of row) {
+          if (!forwardSources.has(node.id)) continue; // only routes ahead of you
           const fromEl = nodeEls.current.get(node.id);
           if (!fromEl) continue;
           const fr = fromEl.getBoundingClientRect();
@@ -168,6 +172,29 @@ export function MapScreen() {
       </div>
     </div>
   );
+}
+
+// The set of nodes whose outgoing edges should be drawn: your current node plus
+// everything still reachable ahead of you. (Before you've moved, that's the
+// whole map; once you commit to a node, only that subtree remains.)
+function forwardSourceNodes(map: MapGraph, currentId: string | null): Set<string> {
+  const sources = new Set<string>();
+  const start = currentId === null ? map.rows[0].map((n) => n.id) : [currentId];
+  const queue = [...start];
+  const seen = new Set(start);
+  while (queue.length) {
+    const id = queue.shift()!;
+    sources.add(id);
+    const node = findNode(map, id);
+    if (!node) continue;
+    for (const e of node.edges) {
+      if (!seen.has(e)) {
+        seen.add(e);
+        queue.push(e);
+      }
+    }
+  }
+  return sources;
 }
 
 function NodeButton({
