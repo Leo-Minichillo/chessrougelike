@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import type { Square } from '../../engine/types';
 
@@ -31,6 +31,16 @@ interface DragState {
   vy: number;
 }
 
+interface Arrow {
+  from: Square;
+  to: Square;
+}
+
+const CENTER = (sq: Square) => ({
+  x: FILES.indexOf(sq[0]) * CELL + CELL / 2,
+  y: (8 - parseInt(sq[1], 10)) * CELL + CELL / 2,
+});
+
 export function Board(props: BoardProps) {
   const {
     fen,
@@ -48,6 +58,20 @@ export function Board(props: BoardProps) {
   const board = useMemo(() => new Chess(fen).board(), [fen]);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  // chess.com-style annotations (right-click): arrows + square highlights.
+  const [arrows, setArrows] = useState<Arrow[]>([]);
+  const [highlights, setHighlights] = useState<Square[]>([]);
+  const [rightDrag, setRightDrag] = useState<{ from: Square; vx: number; vy: number } | null>(null);
+
+  // Annotations are per-position: clear them whenever the board changes.
+  useEffect(() => {
+    setArrows([]);
+    setHighlights([]);
+    setRightDrag(null);
+  }, [fen]);
+
+  const highlightSet = new Set(highlights);
 
   const legal = new Set(legalTargets);
   const targets = new Set(targetingTargets);
@@ -74,7 +98,34 @@ export function Board(props: BoardProps) {
     return board[r][f];
   }
 
+  function toggleArrow(from: Square, to: Square) {
+    setArrows((prev) => {
+      const i = prev.findIndex((a) => a.from === from && a.to === to);
+      if (i >= 0) return prev.filter((_, j) => j !== i);
+      return [...prev, { from, to }];
+    });
+  }
+  function toggleHighlight(sq: Square) {
+    setHighlights((prev) => (prev.includes(sq) ? prev.filter((s) => s !== sq) : [...prev, sq]));
+  }
+
   function onPointerDown(e: React.PointerEvent, sq: Square) {
+    // Right button → chess.com-style annotation (or cancel an armed spell).
+    if (e.button === 2) {
+      e.preventDefault();
+      if (targeting) {
+        onCancel();
+        return;
+      }
+      const { vx, vy } = locate(e.clientX, e.clientY);
+      svgRef.current?.setPointerCapture(e.pointerId);
+      setRightDrag({ from: sq, vx, vy });
+      return;
+    }
+    if (e.button !== 0) return;
+    // Left interaction clears annotations, like chess.com.
+    setArrows([]);
+    setHighlights([]);
     if (!interactive) return;
     const p = pieceAt(sq);
     // Start a drag only when grabbing your own piece outside targeting mode.
@@ -87,6 +138,11 @@ export function Board(props: BoardProps) {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (rightDrag) {
+      const { vx, vy } = locate(e.clientX, e.clientY);
+      setRightDrag({ ...rightDrag, vx, vy });
+      return;
+    }
     if (!drag) return;
     const { vx, vy } = locate(e.clientX, e.clientY);
     setDrag({ ...drag, vx, vy });
@@ -94,6 +150,13 @@ export function Board(props: BoardProps) {
 
   function onPointerUp(e: React.PointerEvent) {
     const { sq } = locate(e.clientX, e.clientY);
+    if (rightDrag) {
+      // Drop on the same square = highlight; on a different square = arrow.
+      if (sq && sq === rightDrag.from) toggleHighlight(sq);
+      else if (sq) toggleArrow(rightDrag.from, sq);
+      setRightDrag(null);
+      return;
+    }
     if (drag) {
       // Dropping on a different square attempts the move; same square = a click.
       if (sq && sq !== drag.from) onSquareClick(sq);
@@ -115,11 +178,7 @@ export function Board(props: BoardProps) {
         style={{ touchAction: 'none' }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setDrag(null);
-          onCancel();
-        }}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <defs>
           <linearGradient id="lightSq" x1="0" y1="0" x2="1" y2="1">
@@ -161,6 +220,9 @@ export function Board(props: BoardProps) {
                 )}
                 {selected === sq && (
                   <rect x={x} y={y} width={CELL} height={CELL} fill="#f6d860" opacity={0.5} />
+                )}
+                {highlightSet.has(sq) && (
+                  <rect x={x} y={y} width={CELL} height={CELL} fill="#e6852b" opacity={0.5} />
                 )}
                 {checkedKing === sq && (
                   <rect x={x} y={y} width={CELL} height={CELL} fill="url(#checkGlow)" />
@@ -242,6 +304,20 @@ export function Board(props: BoardProps) {
           })
         )}
 
+        {/* annotation arrows (right-click drag), drawn on top of the pieces */}
+        <g style={{ pointerEvents: 'none' }}>
+          {arrows.map((a, i) => (
+            <ArrowShape key={i} from={CENTER(a.from)} to={CENTER(a.to)} />
+          ))}
+          {rightDrag && (
+            <ArrowShape
+              from={CENTER(rightDrag.from)}
+              to={{ x: rightDrag.vx, y: rightDrag.vy }}
+              preview
+            />
+          )}
+        </g>
+
         {/* the piece currently being dragged, following the cursor */}
         {drag && (
           <image
@@ -256,5 +332,43 @@ export function Board(props: BoardProps) {
         )}
       </svg>
     </div>
+  );
+}
+
+// A chess.com-style annotation arrow from one square centre to another, with a
+// triangular head. `preview` renders the in-progress (right-drag) arrow.
+function ArrowShape({
+  from,
+  to,
+  preview,
+}: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  preview?: boolean;
+}) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 8) return null;
+  const ux = dx / len;
+  const uy = dy / len;
+  const head = 34;
+  const halfW = 22;
+  // start a little out of the from-centre; line stops where the head begins
+  const sx = from.x + ux * 24;
+  const sy = from.y + uy * 24;
+  const bx = to.x - ux * head;
+  const by = to.y - uy * head;
+  const px = -uy;
+  const py = ux;
+  const color = '#e6852b';
+  return (
+    <g opacity={preview ? 0.55 : 0.78}>
+      <line x1={sx} y1={sy} x2={bx} y2={by} stroke={color} strokeWidth={15} strokeLinecap="round" />
+      <polygon
+        points={`${to.x},${to.y} ${bx + px * halfW},${by + py * halfW} ${bx - px * halfW},${by - py * halfW}`}
+        fill={color}
+      />
+    </g>
   );
 }
