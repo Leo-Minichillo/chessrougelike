@@ -71,19 +71,18 @@ illegal result simply fizzles instead of corrupting the game).
 
 ### A note on the AI
 
-The opponent is a compact, self-contained alpha-beta engine
-(`src/ai/minimax.ts`) running in a Web Worker. It needs no network access and no
-cross-origin isolation headers, so the slice runs anywhere out of the box, and
-its strength is dialled directly from your Elo (search depth + evaluation noise
-+ deliberate-blunder rate).
+The opponent is **Stockfish 11** (`public/stockfish/`, single-threaded
+WASM, classical eval — no NNUE net, no cross-origin headers), driven over UCI
+from `src/ai/StockfishEngine.ts`. Its strength is set straight from your Elo via
+`eloToEngineConfig()` → `UCI_LimitStrength` / `UCI_Elo` / `Skill Level`, so the
+AI genuinely scales (up to ~2850) — which the older bundled engine could not.
 
-The original plan named **stockfish.wasm**. It remains a clean drop-in: the
-`EngineClient` interface and the worker's request/response message shape are
-engine-agnostic, and `eloToEngineConfig()` already emits the Stockfish knobs
-(`UCI_LimitStrength`, `UCI_Elo`, `Skill Level`, `movetime`) alongside the
-minimax ones. Swapping in Stockfish later is contained to `engine.worker.ts` +
-`EngineClient.ts` (and uncommenting the COOP/COEP headers in `vite.config.ts`
-for a multithreaded build).
+A compact alpha-beta engine (`src/ai/minimax.ts`, in a Web Worker) is kept as a
+**fallback**: `EngineClient` prefers Stockfish but transparently drops to
+minimax (then a synchronous search) if Stockfish fails to load, errors, or is
+slow, so the AI can never freeze on its turn.
+
+Stockfish is GPLv3 — see `public/stockfish/LICENSE.txt`.
 
 ## Tuning
 

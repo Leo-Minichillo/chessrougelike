@@ -1,0 +1,6 @@
+Stockfish (stockfish.js / stockfish.wasm) — Stockfish 11, compiled to
+WebAssembly by Niklas Fiekas (https://github.com/niklasf/stockfish.js,
+nmrugg/stockfish.js Stockfish11 branch).
+
+Copyright the Stockfish developers. Released under the GNU General Public
+License v3. See https://www.gnu.org/licenses/gpl-3.0.html

@@ -2,21 +2,36 @@ import type { EngineConfig } from './engineConfig';
 import type { MoveRequest } from '../engine/types';
 import type { EngineRequest, EngineResponse } from './engine.worker';
 import { chooseMove } from './minimax';
+import { StockfishEngine } from './StockfishEngine';
 
 // How long to wait for the worker before falling back to a main-thread search.
 // Puzzle positions have few pieces, so the synchronous fallback is fast.
 const WORKER_TIMEOUT_MS = 5000;
 
-// Promise-based wrapper around the AI worker. A single worker is reused across
-// the whole run. The worker is treated as a best-effort accelerator: if it
-// fails to load, errors, or is slow to answer, getBestMove ALWAYS resolves by
-// computing the move synchronously on the main thread. This guarantees the AI
-// can never "freeze" on its turn (the bug where a hung worker stalled play).
+// Primary engine: vendored Stockfish (real strength scaling via UCI_Elo).
+// Fallback: the bundled minimax worker, then a synchronous main-thread search.
+// getBestMove ALWAYS resolves so the AI can never "freeze" on its turn.
 export class EngineClient {
   private worker: Worker | null = null;
   private seq = 0;
   private pending = new Map<number, (move: MoveRequest | null) => void>();
   private workerDead = false;
+
+  private stockfish: StockfishEngine | null = null;
+
+  // The strongest engine we have: Stockfish if it loads, else minimax.
+  async getBestMove(fen: string, config: EngineConfig): Promise<MoveRequest | null> {
+    if (typeof Worker !== 'undefined' && (!this.stockfish || !this.stockfish.broken)) {
+      try {
+        if (!this.stockfish) this.stockfish = new StockfishEngine();
+        const move = await this.stockfish.getBestMove(fen, config);
+        if (move) return move;
+      } catch {
+        // Stockfish unavailable/slow — fall through to the minimax engine.
+      }
+    }
+    return this.minimaxMove(fen, config);
+  }
 
   constructor() {
     if (typeof Worker !== 'undefined') {
@@ -42,7 +57,7 @@ export class EngineClient {
     }
   }
 
-  async getBestMove(fen: string, config: EngineConfig): Promise<MoveRequest | null> {
+  private async minimaxMove(fen: string, config: EngineConfig): Promise<MoveRequest | null> {
     if (!this.worker || this.workerDead) {
       return chooseMove(fen, config);
     }
@@ -88,6 +103,8 @@ export class EngineClient {
     this.worker?.terminate();
     this.worker = null;
     this.pending.clear();
+    this.stockfish?.dispose();
+    this.stockfish = null;
   }
 }
 
