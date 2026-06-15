@@ -66,6 +66,29 @@ describe('Class-2 relics produce legal boards', () => {
   });
 });
 
+describe('spells per turn', () => {
+  const START2 = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  it('only one spell may be cast per turn by default', () => {
+    const e = new BattleEngine(START2, NEVER, [], [
+      { def: getRelic('frostbite'), charges: 2 },
+      { def: getRelic('banish'), charges: 2 },
+    ]);
+    expect(e.activateRelic('frostbite', 'e7')).toBe(true);
+    expect(e.canCastSpell()).toBe(false);
+    expect(e.activateRelic('banish', 'd7')).toBe(false);
+  });
+
+  it("Archmage's Sigil allows two spells per turn", () => {
+    const e = new BattleEngine(START2, NEVER, [getRelic('archmage')], [
+      { def: getRelic('frostbite'), charges: 2 },
+      { def: getRelic('banish'), charges: 2 },
+    ]);
+    expect(e.activateRelic('frostbite', 'e7')).toBe(true);
+    expect(e.activateRelic('banish', 'd7')).toBe(true);
+    expect(e.canCastSpell()).toBe(false);
+  });
+});
+
 describe('king capture is an instant win', () => {
   it('Time Stutter into a check wins immediately', () => {
     // White Q can check the black king; with an extra move we take the king.

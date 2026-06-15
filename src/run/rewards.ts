@@ -63,10 +63,11 @@ export function rollShop(run: RunState, nodeId: string): ShopItem[] {
     .map((o) => ({ ...o, cost: o.def.cost ?? 50 }));
 }
 
-// The starting boon: 3 choices, each a passive relic OR a "once per battle"
-// spell that never depletes. Picked on the boon screen at run start.
-const BOON_SPELL_IDS = ['time-stutter', 'frostbite', 'conscript', 'banish'];
-const BOON_RELIC_IDS = ['bloodlust', 'momentum', 'plunder', 'tithe'];
+// The starting boon: 3 choices, each more powerful than a standard item — a
+// strong/legendary passive relic, OR a spell you can cast TWICE every battle
+// that never depletes. Picked on the boon screen at run start.
+const BOON_SPELL_IDS = ['time-stutter', 'banish', 'conscript', 'frostbite'];
+const BOON_RELIC_IDS = ['archmage', 'warlord', 'saboteur', 'reliquary'];
 
 export function rollBoons(seed: string): RewardOption[] {
   const rng = rngFromSeed(`${seed}:boons`);

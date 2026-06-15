@@ -47,8 +47,10 @@ export class BattleEngine implements BattleCtx {
   private extraMoves = 0;
   private frozen = new Set<Square>();
   private flags = new Set<string>();
-  // At most one spell per turn: set when a spell is cast, cleared after a move.
-  private spellCastThisTurn = false;
+  // Spell-per-turn limiter: how many spells cast this turn, and the cap (1, or
+  // 2 with the Archmage's Sigil relic). Reset after each move.
+  private spellsCastThisTurn = 0;
+  private maxSpellsPerTurn = 1;
   // Set when the player engineers a position where they would capture the enemy
   // king (e.g. give check then take an extra move). This is an instant win and
   // sidesteps chess.js rejecting the (technically illegal) king-en-prise FEN.
@@ -71,6 +73,7 @@ export class BattleEngine implements BattleCtx {
     this.chess = new Chess(startFen);
     this.objective = objective;
     this.passives = passives;
+    if (passives.some((p) => p.id === 'archmage')) this.maxSpellsPerTurn = 2;
     // Copy spell charges so mutating them here doesn't touch run state directly.
     this.spells = spells.map((s) => ({ def: s.def, charges: s.charges }));
     for (const r of this.passives) r.onBattleStart?.(this);
@@ -237,7 +240,7 @@ export class BattleEngine implements BattleCtx {
     for (const r of this.passives) r.onPlayerMove?.(this, move, captured);
 
     this.fullMovesPlayed += 1;
-    this.spellCastThisTurn = false; // a new turn begins — spells unlocked again
+    this.spellsCastThisTurn = 0; // a new turn begins — spells unlocked again
 
     // Extra-move bookkeeping. chess.js already flipped side-to-move to the AI.
     if (this.extraMoves > 0) {
@@ -333,19 +336,19 @@ export class BattleEngine implements BattleCtx {
     this.version++;
   }
 
-  // Whether a spell may be cast right now (one per turn).
+  // Whether a spell may be cast right now (respecting the per-turn cap).
   canCastSpell(): boolean {
-    return this.phase === 'playerInput' && !this.spellCastThisTurn;
+    return this.phase === 'playerInput' && this.spellsCastThisTurn < this.maxSpellsPerTurn;
   }
 
   // Cast an owned spell. Returns false (and consumes nothing) if it can't fire.
   // Target-requiring spells are validated by the caller/store. Only one spell
   // may be cast per turn.
   activateRelic(defId: string, target?: Square): boolean {
-    if (this.phase !== 'playerInput' || this.spellCastThisTurn) return false;
+    if (!this.canCastSpell()) return false;
     const s = this.spells.find((x) => x.def.id === defId);
     if (!s || s.charges <= 0) return false;
-    this.spellCastThisTurn = true;
+    this.spellsCastThisTurn += 1;
     const before = this.version;
     s.def.activate?.(this, target);
     s.charges -= 1;

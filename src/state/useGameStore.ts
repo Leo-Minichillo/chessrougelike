@@ -131,11 +131,9 @@ function ownedPassives(run: RunState): RelicDef[] {
   return run.relics.map((r) => getRelic(r.defId));
 }
 function ownedSpells(run: RunState): { def: RelicDef; charges: number }[] {
-  // perBattle spells refresh to 1 charge each battle; others use their pool.
-  return run.spells.map((s) => ({
-    def: getRelic(s.defId),
-    charges: s.perBattle ? 1 : s.charges,
-  }));
+  // perBattle spells store their per-battle budget and refresh each fight;
+  // run-pool spells store remaining charges. Either way, use the stored value.
+  return run.spells.map((s) => ({ def: getRelic(s.defId), charges: s.charges }));
 }
 
 // Build the UI projection from the live engine.
@@ -208,6 +206,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     }
     if (won && run.relics.some((r) => r.defId === 'reliquary')) {
       for (const s of run.spells) {
+        if (s.perBattle) continue; // refreshes for free already
         const max = getRelic(s.defId).charges ?? 1;
         s.charges = Math.min(s.charges + 1, max);
       }
@@ -320,8 +319,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     chooseBoon(option) {
       const run = get().run!;
       if (option.kind === 'spell') {
-        // a "once per battle, never depletes" spell
-        grantSpell(run, option.def.id, 1, true);
+        // Starting boon is stronger than a normal spell: TWICE per battle, and
+        // it never depletes.
+        grantSpell(run, option.def.id, 2, true);
       } else {
         grantOption(run, option);
       }

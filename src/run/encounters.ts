@@ -38,28 +38,28 @@ const MATE_PUZZLES: MatePuzzle[] = [
   { mateIn: 2, fen: '6k1/5ppp/6Q1/8/8/8/5R2/6K1 w - - 0 1', title: 'The Squeeze', flavor: 'Drive the king, then deliver.' },
 ];
 
-// BATTLE NODES: big, "filled out" positions that need not be realistic chess —
-// extra knights, double queens, pieces in odd places. You're ahead but the
-// board is crowded and the AI defends hard. Win by checkmate, no move limit.
+// BATTLE NODES: big, "filled out" positions that need not be realistic chess.
+// The AI now has EQUAL or MORE material and plays near its best — you must lean
+// on spells and skill to win. Checkmate, no move limit.
 const BATTLES: Puzzle[] = [
-  { fen: 'rnbqkbnr/pppppppp/8/8/8/2QQ4/PPPPPPPP/RNB1KBNR w KQkq - 0 1', title: 'Twin Crowns', flavor: 'Two queens against one. Bury them.' },
-  { fen: 'rnbqkbnr/pppppppp/8/8/3QQ3/2NNNN2/PPPPPPPP/R3K2R w KQkq - 0 1', title: 'The Knightmare', flavor: 'A wall of cavalry and twin queens. Break through.' },
-  { fen: 'r1bqkb1r/pppppppp/8/8/2NNNN2/3Q1Q2/PPPPPPPP/R3K2R w KQkq - 0 1', title: 'Impossible Army', flavor: 'Four knights, two queens — chess as it was never meant to be.' },
-  { fen: '1nbqkbn1/pppppppp/8/8/2BNNB2/2QRRQ2/PPPPPPPP/4K3 w q - 0 1', title: 'The Overwhelming', flavor: 'Every heavy piece you could dream of. Crush the defence.' },
-  { fen: 'rnbqkbnr/pp1ppp1p/8/2p3p1/2NNNN2/3QQ3/PPP1PP1P/R3K2R w KQkq - 0 1', title: 'War Without Rules', flavor: 'A sprawling melee. Find the mate in the chaos.' },
+  { fen: 'rnbqkbnr/pppppppp/8/3nn3/3NN3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Mirror Melee', flavor: 'Four knights a side. A roiling, even brawl — your spells must tip it.' },
+  { fen: 'rnbqkbnr/pppppppp/8/4q3/4Q3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Twin Courts', flavor: 'Two queens each. Whoever strikes the king first wins.' },
+  { fen: 'rnbqkbnr/pppppppp/8/3nn3/4N3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Black Tide', flavor: 'They are a knight to the good. Even the odds, then break them.' },
 ];
 
-// ELITE NODES: full-board, slim single-minor edge — long, hard fights.
+// ELITE NODES: the AI is clearly up material (a rook or two minors) — long, brutal
+// fights you cannot win on material alone.
 const ELITE: Puzzle[] = [
-  { fen: 'r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'The Champion of the Wood', flavor: 'A full enemy army, you only a knight ahead. A long fight.' },
-  { fen: 'rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Warden of the Gate', flavor: 'Barely ahead against a complete host. Grind it down — or break it with magic.' },
-  { fen: 'rn1qkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'The Iron Marshal', flavor: 'One bishop to the good. Patience and spells win this.' },
+  { fen: 'rnbqkbnr/pppppppp/8/2n1n3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Cavalry Charge', flavor: 'Two extra knights bear down on you. Spend everything to survive.' },
+  { fen: 'rnbqkbnr/pppppppp/8/3r4/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'The Iron Marshal', flavor: 'A whole rook down. Only magic and precision win here.' },
+  { fen: 'rnbqkbnr/pppppppp/8/3rr3/4R3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', title: 'Twin Generals', flavor: 'Their heavy pieces outnumber yours. Banish, conscript, conquer.' },
 ];
 
 const BOSS: Puzzle = {
-  fen: 'rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+  fen: 'rnbqkbnr/pppppppp/8/4q3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   title: 'The Necromancer',
-  flavor: 'Up a queen — but every third turn it drags a fallen soldier back from the grave. Mate it before the dead pile up.',
+  flavor:
+    'A queen ahead AND raising its dead every third turn. Without spells and relics, this fight cannot be won.',
 };
 
 function necromancerHook(engine: BattleEngine): void {

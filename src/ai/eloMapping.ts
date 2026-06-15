@@ -72,12 +72,18 @@ export function nodeEloBonus(node: Pick<MapNode, 'type' | 'row'>): number {
   }
 }
 
-// The headline difficulty function: combine the player's base Elo, the node
-// ramp, the act, and the humanize offset into the effective Elo.
+// The headline difficulty function. Combat encounters (battle/elite/boss) are
+// deliberately brutal: the AI plays at roughly TWICE the player's rating (so it
+// always plays at the bundled engine's strongest), and the positions hand it a
+// material edge on top. Puzzles defend a lost position well but don't need 2x.
 export function computeEncounterElo(
   run: Pick<RunState, 'baseElo' | 'act'>,
   node: Pick<MapNode, 'type' | 'row'>
 ): number {
-  const actBonus = (run.act - 1) * 120;
-  return run.baseElo + nodeEloBonus(node) + actBonus + ELO_HUMANIZE_OFFSET;
+  if (node.type === 'puzzle') {
+    return clamp(run.baseElo + 200 + (run.act - 1) * 120, 1300, 2800);
+  }
+  // battle / elite / boss
+  const eliteBump = node.type === 'elite' ? 200 : node.type === 'boss' ? 300 : 0;
+  return clamp(run.baseElo * 2 + (run.act - 1) * 200 + eliteBump + node.row * 10, 1700, 2800);
 }

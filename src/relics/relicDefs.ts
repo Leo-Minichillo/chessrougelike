@@ -49,33 +49,28 @@ export const RELICS: RelicDef[] = [
     // spell charges persist across battles rather than refilling each fight.
   },
   {
-    id: 'bloodlust',
-    name: 'Bloodlust',
+    id: 'archmage',
+    name: "Archmage's Sigil",
     kind: 'passive',
-    rarity: 'uncommon',
-    icon: '🩸',
-    cost: 70,
-    description: 'Every 3rd piece you capture in a battle grants you an extra move.',
-    onPlayerMove(ctx, _move, captured) {
-      if (captured && ctx.tick('bloodlust') % 3 === 0) {
-        ctx.grantExtraMove();
-        ctx.log('Bloodlust: the slaughter fuels you — move again!');
-      }
-    },
+    rarity: 'rare',
+    icon: '🪄',
+    cost: 120,
+    description: 'Legendary. You may cast TWO spells each turn instead of one.',
+    // Read by BattleEngine to raise the per-turn spell limit.
   },
   {
-    id: 'momentum',
-    name: 'Momentum',
+    id: 'warlord',
+    name: 'Warlord',
     kind: 'passive',
-    rarity: 'uncommon',
-    icon: '🌀',
-    cost: 65,
-    description: 'Every 4th move you make grants an extra move.',
-    onPlayerMove(ctx) {
-      if (ctx.tick('momentum') % 4 === 0) {
-        ctx.grantExtraMove();
-        ctx.log('Momentum: you flow into another move!');
-      }
+    rarity: 'rare',
+    icon: '🛡️',
+    cost: 85,
+    description: 'At the start of each battle, summon a free knight on your back rank.',
+    onBattleStart(ctx) {
+      const sq = ctx.emptyBackRankSquares()[0];
+      if (!sq) return;
+      const next = placePiece(ctx.fen(), sq, 'n', 'w');
+      if (next && ctx.setFen(next)) ctx.log(`Warlord: a knight musters on ${sq}.`);
     },
   },
   {

@@ -17,9 +17,11 @@ export function RelicCard({
   const isSpell = kind === 'spell';
   const kindLabel = isSpell
     ? boon
-      ? 'Spell · once per battle (permanent)'
+      ? 'Spell · TWICE per battle (permanent)'
       : `Spell · +${def.charges ?? 1} charges`
-    : 'Relic · passive';
+    : boon
+      ? 'Relic · passive (legendary)'
+      : 'Relic · passive';
   return (
     <div
       className={`relic-card rarity-${def.rarity}`}

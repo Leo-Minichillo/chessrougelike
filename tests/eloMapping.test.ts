@@ -3,7 +3,6 @@ import {
   eloToEngineConfig,
   computeEncounterElo,
   nodeEloBonus,
-  ELO_HUMANIZE_OFFSET,
 } from '../src/ai/eloMapping';
 
 describe('eloToEngineConfig', () => {
@@ -53,21 +52,28 @@ describe('encounter escalation', () => {
     );
   });
 
-  it('applies the humanize offset and node bonus to base elo', () => {
-    const node = { type: 'battle' as const, row: 0 };
-    const eff = computeEncounterElo({ baseElo: 1500, act: 1 }, node);
-    expect(eff).toBe(1500 + nodeEloBonus(node) + ELO_HUMANIZE_OFFSET);
+  it('battles run the AI at roughly twice the player rating', () => {
+    const eff = computeEncounterElo({ baseElo: 900, act: 1 }, { type: 'battle', row: 0 });
+    expect(eff).toBeGreaterThanOrEqual(900 * 2);
+  });
+
+  it('elites are harder than battles, bosses hardest', () => {
+    const battle = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'battle', row: 3 });
+    const elite = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'elite', row: 3 });
+    const boss = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'boss', row: 3 });
+    expect(elite).toBeGreaterThan(battle);
+    expect(boss).toBeGreaterThan(elite);
   });
 
   it('ramps battle difficulty with map depth', () => {
-    const early = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
-    const late = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 6 });
+    const early = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'battle', row: 0 });
+    const late = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'battle', row: 6 });
     expect(late).toBeGreaterThan(early);
   });
 
   it('later acts are harder', () => {
-    const a1 = computeEncounterElo({ baseElo: 1500, act: 1 }, { type: 'battle', row: 0 });
-    const a3 = computeEncounterElo({ baseElo: 1500, act: 3 }, { type: 'battle', row: 0 });
+    const a1 = computeEncounterElo({ baseElo: 1000, act: 1 }, { type: 'battle', row: 0 });
+    const a3 = computeEncounterElo({ baseElo: 1000, act: 3 }, { type: 'battle', row: 0 });
     expect(a3).toBeGreaterThan(a1);
   });
 });
